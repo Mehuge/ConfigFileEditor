@@ -52,6 +52,8 @@ namespace ConfigFileEditor
             keyName = new TextBox();
             statusStrip1 = new StatusStrip();
             toolStripStatusLabel1 = new ToolStripStatusLabel();
+            textFilter = new TextBox();
+            buttonClearFilter = new Button();
             menuStrip1.SuspendLayout();
             statusStrip1.SuspendLayout();
             SuspendLayout();
@@ -126,10 +128,10 @@ namespace ConfigFileEditor
             // treeViewConfigOptions
             // 
             treeViewConfigOptions.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
-            treeViewConfigOptions.Location = new Point(14, 36);
+            treeViewConfigOptions.Location = new Point(14, 70);
             treeViewConfigOptions.Margin = new Padding(3, 4, 3, 4);
             treeViewConfigOptions.Name = "treeViewConfigOptions";
-            treeViewConfigOptions.Size = new Size(285, 538);
+            treeViewConfigOptions.Size = new Size(285, 504);
             treeViewConfigOptions.TabIndex = 1;
             treeViewConfigOptions.AfterSelect += treeView1_AfterSelect;
             // 
@@ -249,11 +251,36 @@ namespace ConfigFileEditor
             toolStripStatusLabel1.Name = "toolStripStatusLabel1";
             toolStripStatusLabel1.Size = new Size(0, 16);
             // 
+            // textFilter
+            // 
+            textFilter.Location = new Point(14, 38);
+            textFilter.Name = "textFilter";
+            textFilter.PlaceholderText = "Search...";
+            textFilter.Size = new Size(285, 27);
+            textFilter.TabIndex = 12;
+            textFilter.TextChanged += textFilter_TextChanged;
+            // 
+            // buttonClearFilter
+            // 
+            buttonClearFilter.BackColor = Color.White;
+            buttonClearFilter.FlatAppearance.BorderSize = 0;
+            buttonClearFilter.FlatStyle = FlatStyle.Flat;
+            buttonClearFilter.Font = new Font("Segoe UI", 7.8F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            buttonClearFilter.Location = new Point(280, 39);
+            buttonClearFilter.Name = "buttonClearFilter";
+            buttonClearFilter.Size = new Size(19, 24);
+            buttonClearFilter.TabIndex = 13;
+            buttonClearFilter.Text = "X";
+            buttonClearFilter.UseVisualStyleBackColor = false;
+            buttonClearFilter.Click += buttonClearFilter_Click;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(8F, 20F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(914, 600);
+            Controls.Add(buttonClearFilter);
+            Controls.Add(textFilter);
             Controls.Add(statusStrip1);
             Controls.Add(keyName);
             Controls.Add(sectionName);
@@ -305,5 +332,7 @@ namespace ConfigFileEditor
         private TextBox keyName;
         private StatusStrip statusStrip1;
         private ToolStripStatusLabel toolStripStatusLabel1;
+        private TextBox textFilter;
+        private Button buttonClearFilter;
     }
 }

@@ -26,16 +26,16 @@ namespace ConfigFileEditor
 
             // Prompt to save changes
             DialogResult result = MessageBox.Show(
-                "You have unsaved changes. Save them before exiting?", 
-                "Unsaved Changes", 
-                MessageBoxButtons.YesNoCancel, 
+                "You have unsaved changes. Save them before exiting?",
+                "Unsaved Changes",
+                MessageBoxButtons.YesNoCancel,
                 MessageBoxIcon.Warning
             );
 
             if (result == DialogResult.Cancel)
             {
                 // User clicked Cancel -> Stop the application from closing!
-                e.Cancel = true; 
+                e.Cancel = true;
                 return;
             }
 
@@ -61,18 +61,21 @@ namespace ConfigFileEditor
 
         private void treeView1_ItemDrag(object? sender, ItemDragEventArgs e)
         {
+            // Prevent dragging if a search filter is currently applied
+            if (!string.IsNullOrEmpty(textFilter.Text)) return;
+
             if (e.Button == MouseButtons.Left && e.Item != null)
             {
                 DoDragDrop(e.Item, DragDropEffects.Move);
             }
         }
 
-        private void treeView1_DragEnter(object ?sender, DragEventArgs e)
+        private void treeView1_DragEnter(object? sender, DragEventArgs e)
         {
             e.Effect = e.AllowedEffect;
         }
 
-        private void treeView1_DragOver(object ?sender, DragEventArgs e)
+        private void treeView1_DragOver(object? sender, DragEventArgs e)
         {
             Point targetPoint = treeViewConfigOptions.PointToClient(new Point(e.X, e.Y));
             TreeNode targetNode = treeViewConfigOptions.GetNodeAt(targetPoint);
@@ -102,7 +105,7 @@ namespace ConfigFileEditor
             e.Effect = DragDropEffects.Move;
         }
 
-        private void treeView1_DragDrop(object ?sender, DragEventArgs e)
+        private void treeView1_DragDrop(object? sender, DragEventArgs e)
         {
             Point targetPoint = treeViewConfigOptions.PointToClient(new Point(e.X, e.Y));
             TreeNode targetNode = treeViewConfigOptions.GetNodeAt(targetPoint);
@@ -123,7 +126,7 @@ namespace ConfigFileEditor
             else if (draggedNode.Level == 1)
             {
                 // CASE B: Moving an Option/Comment within or between sections.
-                
+
                 // Find where the dragged entry currently lives and pull it out
                 iniStructure.Remove(draggedEntry);
 
@@ -181,7 +184,7 @@ namespace ConfigFileEditor
             // 1. Gather the entire contiguous block of IniEntries belonging to the dragged section
             int startIdx = iniStructure.IndexOf(draggedSection);
             List<IniEntry> blockToMove = new List<IniEntry>();
-            
+
             // Read forward from the section header until we hit the next section header
             for (int i = startIdx; i < iniStructure.Count; i++)
             {
@@ -228,7 +231,7 @@ namespace ConfigFileEditor
                     {
                         sections[currentSectionName] = new Dictionary<string, string>();
                     }
-                    
+
                     // Only index active settings, or adjust rules if you want commented ones skipped
                     if (!settingEntry.IsCommentedOut)
                     {
@@ -565,7 +568,7 @@ namespace ConfigFileEditor
             buttonRemoveSetting.Enabled = false;
 
             TreeNode? currentSectionNode = null;
-            string currentSectionName = "[Default]"; 
+            string currentSectionName = "[Default]";
 
             foreach (string line in File.ReadAllLines(path))
             {
@@ -574,10 +577,10 @@ namespace ConfigFileEditor
                 if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
                 {
                     currentSectionName = trimmedLine.Substring(1, trimmedLine.Length - 2);
-                    
+
                     var sectionEntry = new SectionEntry { SectionName = currentSectionName, RawLine = line };
                     iniStructure.Add(sectionEntry);
-                    
+
                     currentSectionNode = treeViewConfigOptions.Nodes.Add(currentSectionName, currentSectionName);
                     currentSectionNode.Tag = sectionEntry;
                 }
@@ -612,7 +615,7 @@ namespace ConfigFileEditor
                     {
                         var commentEntry = new CommentEntry { RawLine = line };
                         iniStructure.Add(commentEntry);
-                        
+
                         if (currentSectionNode != null)
                         {
                             TreeNode settingNode = currentSectionNode.Nodes.Add(line);
@@ -635,117 +638,7 @@ namespace ConfigFileEditor
             // --- THE MAGIC TOUCH ---
             // Now that iniStructure is perfectly built, let the helper generate the dictionary!
             RebuildSectionsDictionary();
-
-            AddToMru(path);
-            UpdateStatus($"File Loaded: {path}");
-            this.Text = "Editing " + path;
-            currentFilePath = path;
-        }
-
-        // Placeholder methods for LoadFile and SaveFile, will be implemented later
-        private void LoadFile_Orig_deleteme(string path)
-        {
-            if (string.IsNullOrEmpty(path)) return;
-
-            iniStructure.Clear();
-            treeViewConfigOptions.Nodes.Clear();
-            sections.Clear();
-
-            // Clear detail panel
-            sectionName.Text = "";
-            keyName.Text = "";
-            value.Text = "";
-            value.Enabled = false;
-            buttonAddSetting.Enabled = true;
-            buttonRemoveSetting.Enabled = false;
-
-            TreeNode? currentSectionNode = null;
-            string currentSectionName = "[Default]"; // Start with default section context
-
-            foreach (string line in File.ReadAllLines(path))
-            {
-                string trimmedLine = line.Trim();
-
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                {
-                    currentSectionName = trimmedLine.Substring(1, trimmedLine.Length - 2);
-                    if (!sections.ContainsKey(currentSectionName))
-                    {
-                        sections[currentSectionName] = new Dictionary<string, string>();
-                        var sectionEntry = new SectionEntry { SectionName = currentSectionName, RawLine = line };
-                        iniStructure.Add(sectionEntry);
-                        currentSectionNode = treeViewConfigOptions.Nodes.Add(currentSectionName, currentSectionName);
-                        currentSectionNode.Tag = sectionEntry;
-                    }
-                    else
-                    {
-                        // Find existing section node if it exists
-                        TreeNode[] nodes = treeViewConfigOptions.Nodes.Find(currentSectionName, false);
-                        if (nodes.Length > 0)
-                        {
-                            currentSectionNode = nodes[0];
-                        }
-                    }
-                }
-                else
-                {
-                    bool isCommented = trimmedLine.StartsWith(";") || trimmedLine.StartsWith("#");
-                    string potentialSettingLine = isCommented ? trimmedLine.Substring(1).Trim() : trimmedLine;
-
-                    if (potentialSettingLine.Contains("="))
-                    {
-                        // This is a setting, commented or not
-                        string[] parts = potentialSettingLine.Split(new[] { '=' }, 2);
-                        string key = parts[0].Trim();
-                        string value = parts[1].Trim();
-
-                        // Ensure the section exists in the UI and data structures
-                        if (!sections.ContainsKey(currentSectionName))
-                        {
-                            sections[currentSectionName] = new Dictionary<string, string>();
-                            if (currentSectionName == "[Default]")
-                            {
-                                currentSectionNode = treeViewConfigOptions.Nodes.Add(currentSectionName, currentSectionName);
-                                currentSectionNode.Tag = new SectionEntry { SectionName = currentSectionName, RawLine = "" };
-                            }
-                        }
-
-                        sections[currentSectionName][key] = value;
-
-                        var settingEntry = new SettingEntry { Key = key, Value = value, IsCommentedOut = isCommented };
-                        iniStructure.Add(settingEntry);
-
-                        if (currentSectionNode != null)
-                        {
-                            string nodeText = isCommented ? $"; {key}" : key;
-                            TreeNode settingNode = currentSectionNode.Nodes.Add(key, nodeText);
-                            settingNode.Tag = settingEntry;
-                        }
-                    }
-                    else if (isCommented)
-                    {
-                        // This is a regular comment
-                        var commentEntry = new CommentEntry { RawLine = line };
-                        iniStructure.Add(commentEntry);
-                        if (currentSectionNode != null)
-                        {
-                            TreeNode settingNode = currentSectionNode.Nodes.Add(line);
-                            settingNode.Tag = commentEntry;
-                        }
-                        else
-                        {
-                            currentSectionNode = treeViewConfigOptions.Nodes.Add(currentSectionName, line);
-                            currentSectionNode.Tag = commentEntry;
-                        }
-                    }
-                    else
-                    {
-                        // This is a blank line
-                        var blankLineEntry = new BlankLineEntry { RawLine = line };
-                        iniStructure.Add(blankLineEntry);
-                    }
-                }
-            }
+            UpdateTreeView();
 
             AddToMru(path);
             UpdateStatus($"File Loaded: {path}");
@@ -804,12 +697,14 @@ namespace ConfigFileEditor
         {
             if (File.Exists(mruPath))
             {
-                try {
+                try
+                {
                     string json = File.ReadAllText(mruPath);
                     // Using a simple split if you don't want to add JSON dependencies, 
                     // but here is the logic for a basic string list:
                     mruFiles = json.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries).ToList();
-                } catch { /* Handle file error */ }
+                }
+                catch { /* Handle file error */ }
             }
             RefreshMruMenu();
         }
@@ -861,10 +756,11 @@ namespace ConfigFileEditor
         private void UpdateStatus(string message)
         {
             toolStripStatusLabel1.Text = $"{DateTime.Now.ToShortTimeString()} - {message}";
-            
+
             // Optional: Reset the text after 5 seconds so it doesn't look stale
             var timer = new System.Windows.Forms.Timer { Interval = 5000 };
-            timer.Tick += (s, e) => {
+            timer.Tick += (s, e) =>
+            {
                 toolStripStatusLabel1.Text = "Ready";
                 timer.Stop();
                 timer.Dispose();
@@ -872,6 +768,115 @@ namespace ConfigFileEditor
             timer.Start();
         }
 
+        private void UpdateTreeView(string searchTerm = "")
+        {
+            treeViewConfigOptions.Nodes.Clear();
+
+            // Normalize search term for case-insensitive matching
+            string query = searchTerm.Trim().ToLower();
+            bool isSearching = !string.IsNullOrEmpty(query);
+
+            TreeNode? currentSectionNode = null;
+
+            foreach (var entry in iniStructure)
+            {
+                if (entry is SectionEntry sectionEntry)
+                {
+                    // If searching, only add the section header if its name matches, 
+                    // OR we can let it dynamically appear if its children match (handled below)
+                    bool sectionMatches = sectionEntry.SectionName.ToLower().Contains(query);
+
+                    // We create the node, but we might remove it later if it ends up empty during a search
+                    currentSectionNode = treeViewConfigOptions.Nodes.Add(sectionEntry.SectionName, sectionEntry.SectionName);
+                    currentSectionNode.Tag = sectionEntry;
+
+                    // Tag along whether the section itself was a match
+                    currentSectionNode.ImageKey = sectionMatches ? "match" : "";
+                    continue;
+                }
+
+                // We need a valid section node to attach children to. If none exists yet, skip.
+                if (currentSectionNode == null) continue;
+
+                if (entry is SettingEntry settingEntry)
+                {
+                    bool keyMatch = settingEntry.Key.ToLower().Contains(query);
+                    bool valueMatch = settingEntry.Value.ToLower().Contains(query);
+
+                    // If searching, skip this setting if neither key nor value matches, 
+                    // UNLESS the parent section name itself was a match
+                    if (isSearching && !keyMatch && !valueMatch && currentSectionNode.ImageKey != "match")
+                        continue;
+
+                    string nodeText = settingEntry.IsCommentedOut ? $"; {settingEntry.Key}" : settingEntry.Key;
+                    TreeNode settingNode = currentSectionNode.Nodes.Add(settingEntry.Key, nodeText);
+                    settingNode.Tag = settingEntry;
+                }
+                else if (entry is CommentEntry commentEntry)
+                {
+                    bool commentMatch = commentEntry.RawLine.ToLower().Contains(query);
+
+                    if (isSearching && !commentMatch && currentSectionNode.ImageKey != "match")
+                        continue;
+
+                    TreeNode commentNode = currentSectionNode.Nodes.Add(commentEntry.RawLine);
+                    commentNode.Tag = commentEntry;
+                }
+            }
+
+            // Clean up phase: If searching, remove any section nodes that don't have any matching children
+            if (isSearching)
+            {
+                CleanEmptySectionsAndSelectFirst();
+            }
+        }
+
+        private void CleanEmptySectionsAndSelectFirst()
+        {
+            // Loop backwards through top-level nodes so removing elements doesn't break indices
+            for (int i = treeViewConfigOptions.Nodes.Count - 1; i >= 0; i--)
+            {
+                TreeNode sectionNode = treeViewConfigOptions.Nodes[i];
+
+                // If the section header didn't match the query AND it has no matching children, vanish it
+                if (sectionNode.ImageKey != "match" && sectionNode.Nodes.Count == 0)
+                {
+                    sectionNode.Remove();
+                }
+                else
+                {
+                    // If it survived, expand it so the user sees the results inside
+                    sectionNode.Expand();
+                }
+            }
+
+            // Automatically select the first available result
+            if (treeViewConfigOptions.Nodes.Count == 0) return;
+
+            TreeNode firstNode = treeViewConfigOptions.Nodes[0];
+
+            // If the section has children, select the first actual setting/comment instead of the header
+            if (firstNode.Nodes.Count > 0)
+            {
+                treeViewConfigOptions.SelectedNode = firstNode.Nodes[0];
+                return;
+            }
+
+            treeViewConfigOptions.SelectedNode = firstNode;
+        }
+
+        private void textFilter_TextChanged(object sender, EventArgs e)
+        {
+            if (textFilter == null) return;
+            UpdateTreeView(textFilter.Text);
+        }
+
+        private void buttonClearFilter_Click(object sender, EventArgs e)
+        {
+            if (textFilter == null) return;
+            textFilter.Text = ""; // Clearing the text will automatically fire TextChanged and reset the tree!
+            textFilter.Focus();
+        }
     }
 
     // New classes for INI file structure
