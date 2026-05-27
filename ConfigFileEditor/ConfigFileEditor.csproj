@@ -9,6 +9,7 @@
     <Title>Config File Editor</Title>
     <ApplicationIcon>ConfigFileEditor.ico</ApplicationIcon>
     <PackageIcon>Config File Editor Icon.png</PackageIcon>
+    <VersionPrefix>1.0.0</VersionPrefix>
   </PropertyGroup>
 
   <ItemGroup>
