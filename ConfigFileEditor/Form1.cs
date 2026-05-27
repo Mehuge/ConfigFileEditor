@@ -7,7 +7,7 @@ namespace ConfigFileEditor
 {
     public partial class Form1 : Form
     {
-        private string? currentFilePath;
+        private string? currentFilePath = null;
         private List<IniEntry> iniStructure = new List<IniEntry>();
         private Dictionary<string, Dictionary<string, string>> sections = new Dictionary<string, Dictionary<string, string>>();
 
@@ -16,13 +16,20 @@ namespace ConfigFileEditor
             InitializeComponent();
             LoadMruList();
             EnableTreeViewDragDrop();
+            NewFile();
 
             this.FormClosing += Form1_FormClosing;
         }
 
-        private void Form1_FormClosing(object? sender, FormClosingEventArgs e)
+        private void NewFile()
         {
-            if (!this.Text.EndsWith("*")) return;
+            this.Text = "New Configuration File";
+            UpdateStatus("New Configuration");
+        }
+
+        private DialogResult CheckUnsavedChanges()
+        {
+            if (!this.Text.EndsWith("*")) return DialogResult.None;
 
             // Prompt to save changes
             DialogResult result = MessageBox.Show(
@@ -32,19 +39,46 @@ namespace ConfigFileEditor
                 MessageBoxIcon.Warning
             );
 
-            if (result == DialogResult.Cancel)
-            {
-                // User clicked Cancel -> Stop the application from closing!
-                e.Cancel = true;
-                return;
-            }
-
             if (result == DialogResult.Yes)
             {
                 // User wants to save. Call your save logic.
                 SaveFile();
                 ClearChanged();
             }
+
+            return result;
+        }
+
+        private void Form1_FormClosing(object? sender, FormClosingEventArgs e)
+        {
+            DialogResult result = CheckUnsavedChanges();
+            if (result == DialogResult.Cancel) e.Cancel = true;
+        }
+            
+        private void newFileToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            DialogResult result = CheckUnsavedChanges();
+            if (result == DialogResult.Cancel) return;
+
+            // Reset everything to a clean, blank slate
+            iniStructure.Clear();
+            sections.Clear();
+            treeViewConfigOptions.Nodes.Clear();
+            
+            currentFilePath = null; 
+            
+            // Reset detail panels
+            sectionName.Text = "";
+            keyName.Text = "";
+            value.Text = "";
+            value.Enabled = false;
+
+            // Keep editing capabilities wide open
+            buttonAddSection.Enabled = true;
+            buttonAddSetting.Enabled = true;
+            buttonRemoveSetting.Enabled = false;
+
+            NewFile();
         }
 
         private void EnableTreeViewDragDrop()
@@ -543,7 +577,8 @@ namespace ConfigFileEditor
 
         private void MarkChanged()
         {
-            if (!this.Text.EndsWith("*")) this.Text += "*";
+            if (this.Text.EndsWith("*")) return;
+            this.Text += "*";
         }
 
         private void ClearChanged()
@@ -644,11 +679,17 @@ namespace ConfigFileEditor
             UpdateStatus($"File Loaded: {path}");
             this.Text = "Editing " + path;
             currentFilePath = path;
+
+            // buttonAddSection.Enabled = true;
         }
 
         private void SaveFile()
         {
-            if (string.IsNullOrEmpty(currentFilePath)) return;
+            if (string.IsNullOrEmpty(currentFilePath))
+            {
+                SaveFileAs();
+                return;
+            }
 
             List<string> lines = new List<string>();
             foreach (var entry in iniStructure)
@@ -677,6 +718,24 @@ namespace ConfigFileEditor
             ClearChanged();
         }
 
+        private void SaveFileAs()
+        {
+            using SaveFileDialog saveFileDialog = new SaveFileDialog();
+            saveFileDialog.Filter = "Configuration Files (*.ini;*.cfg)|*.ini;*.cfg|All Files (*.*)|*.*";
+            saveFileDialog.DefaultExt = "ini";
+            saveFileDialog.Title = "Save Configuration File As";
+
+            if (saveFileDialog.ShowDialog() != DialogResult.OK) return;
+
+            // Capture the chosen path
+            currentFilePath = saveFileDialog.FileName;
+
+            // Now that currentFilePath is valid, call the core SaveFile() to write the data
+            SaveFile();
+
+            // Add to your Most Recently Used list if applicable
+            AddToMru(currentFilePath);
+        }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
@@ -877,6 +936,92 @@ namespace ConfigFileEditor
             textFilter.Text = ""; // Clearing the text will automatically fire TextChanged and reset the tree!
             textFilter.Focus();
         }
+
+        private void buttonAddSection_Click(object? sender, EventArgs e)
+        {
+            // 1. Prompt the user for the new section name using a dialog
+            string newSectionName = PromptForSectionName();
+
+            // Early return if the user cancelled or entered nothing
+            if (string.IsNullOrWhiteSpace(newSectionName)) return;
+
+            // Clean up brackets if the user typed them manually (e.g., "[MySection]" -> "MySection")
+            newSectionName = newSectionName.Trim('[', ']');
+
+            // 2. Prevent duplicate sections
+            if (sections.ContainsKey(newSectionName))
+            {
+                MessageBox.Show($"A section named [{newSectionName}] already exists.", "Duplicate Section", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            // 3. Create the new section entry data model
+            var newSectionEntry = new SectionEntry
+            {
+                SectionName = newSectionName,
+                RawLine = $"[{newSectionName}]"
+            };
+
+            // 4. Update the single source of truth (Append it to the end of the file structure)
+            iniStructure.Add(newSectionEntry);
+
+            // 5. Update the fast-lookup dictionary and refresh the visual tree
+            RebuildSectionsDictionary();
+            UpdateTreeView();
+
+            // 6. Find and automatically select the newly created section in the UI
+            SelectSectionNode(newSectionName);
+
+            // 7. Mark the file as modified
+            MarkChanged();
+        }
+
+        private string PromptForSectionName()
+        {
+            // Creates a lightweight, dynamic popup dialog form on the fly
+            Form prompt = new Form()
+            {
+                Width = 350,
+                Height = 180,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                Text = "Add New Section",
+                StartPosition = FormStartPosition.CenterParent,
+                MaximizeBox = false,
+                MinimizeBox = false
+            };
+
+            Label textLabel = new Label() { Left = 20, Top = 20, Width = 300, Text = "Enter section name:" };
+            TextBox textBox = new TextBox() { Left = 20, Top = 45, Width = 300 };
+            Button confirmation = new Button() { Text = "OK", Left = 115, Width = 100, Top = 80, Height = 30, DialogResult = DialogResult.OK };
+            Button cancel = new Button() { Text = "Cancel", Left = 220, Width = 100, Top = 80, Height = 30, DialogResult = DialogResult.Cancel };
+
+            confirmation.Click += (sender, e) => { prompt.Close(); };
+            cancel.Click += (sender, e) => { prompt.Close(); };
+
+            prompt.Controls.Add(textBox);
+            prompt.Controls.Add(confirmation);
+            prompt.Controls.Add(cancel);
+            prompt.Controls.Add(textLabel);
+            prompt.AcceptButton = confirmation;
+            prompt.CancelButton = cancel;
+
+            // Return the text if they clicked OK, otherwise return string.Empty
+            return prompt.ShowDialog() == DialogResult.OK ? textBox.Text : string.Empty;
+        }
+
+        private void SelectSectionNode(string sectionName)
+        {
+            // Search the tree view for the exact key/text matching the section name
+            foreach (TreeNode node in treeViewConfigOptions.Nodes)
+            {
+                if (node.Text != sectionName) continue;
+
+                treeViewConfigOptions.SelectedNode = node;
+                node.EnsureVisible();
+                return;
+            }
+        }
+
     }
 
     // New classes for INI file structure

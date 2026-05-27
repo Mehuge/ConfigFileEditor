@@ -54,6 +54,8 @@ namespace ConfigFileEditor
             toolStripStatusLabel1 = new ToolStripStatusLabel();
             textFilter = new TextBox();
             buttonClearFilter = new Button();
+            buttonAddSection = new Button();
+            newFileToolStripMenuItem = new ToolStripMenuItem();
             menuStrip1.SuspendLayout();
             statusStrip1.SuspendLayout();
             SuspendLayout();
@@ -71,7 +73,7 @@ namespace ConfigFileEditor
             // 
             // fileToolStripMenuItem
             // 
-            fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { openToolStripMenuItem, saveToolStripMenuItem, exitToolStripMenuItem });
+            fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { newFileToolStripMenuItem, openToolStripMenuItem, saveToolStripMenuItem, exitToolStripMenuItem });
             fileToolStripMenuItem.Name = "fileToolStripMenuItem";
             fileToolStripMenuItem.Size = new Size(46, 24);
             fileToolStripMenuItem.Text = "File";
@@ -79,21 +81,21 @@ namespace ConfigFileEditor
             // openToolStripMenuItem
             // 
             openToolStripMenuItem.Name = "openToolStripMenuItem";
-            openToolStripMenuItem.Size = new Size(128, 26);
+            openToolStripMenuItem.Size = new Size(224, 26);
             openToolStripMenuItem.Text = "Open";
             openToolStripMenuItem.Click += openToolStripMenuItem_Click;
             // 
             // saveToolStripMenuItem
             // 
             saveToolStripMenuItem.Name = "saveToolStripMenuItem";
-            saveToolStripMenuItem.Size = new Size(128, 26);
+            saveToolStripMenuItem.Size = new Size(224, 26);
             saveToolStripMenuItem.Text = "Save";
             saveToolStripMenuItem.Click += saveToolStripMenuItem_Click;
             // 
             // exitToolStripMenuItem
             // 
             exitToolStripMenuItem.Name = "exitToolStripMenuItem";
-            exitToolStripMenuItem.Size = new Size(128, 26);
+            exitToolStripMenuItem.Size = new Size(224, 26);
             exitToolStripMenuItem.Text = "Exit";
             exitToolStripMenuItem.Click += exitToolStripMenuItem_Click;
             // 
@@ -274,11 +276,30 @@ namespace ConfigFileEditor
             buttonClearFilter.UseVisualStyleBackColor = false;
             buttonClearFilter.Click += buttonClearFilter_Click;
             // 
+            // buttonAddSection
+            // 
+            buttonAddSection.Location = new Point(765, 41);
+            buttonAddSection.Margin = new Padding(3, 4, 3, 4);
+            buttonAddSection.Name = "buttonAddSection";
+            buttonAddSection.Size = new Size(137, 31);
+            buttonAddSection.TabIndex = 14;
+            buttonAddSection.Text = "Add Section";
+            buttonAddSection.UseVisualStyleBackColor = true;
+            buttonAddSection.Click += buttonAddSection_Click;
+            // 
+            // newFileToolStripMenuItem
+            // 
+            newFileToolStripMenuItem.Name = "newFileToolStripMenuItem";
+            newFileToolStripMenuItem.Size = new Size(224, 26);
+            newFileToolStripMenuItem.Text = "New File";
+            newFileToolStripMenuItem.Click += newFileToolStripMenuItem_Click;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(8F, 20F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(914, 600);
+            Controls.Add(buttonAddSection);
             Controls.Add(buttonClearFilter);
             Controls.Add(textFilter);
             Controls.Add(statusStrip1);
@@ -334,5 +355,7 @@ namespace ConfigFileEditor
         private ToolStripStatusLabel toolStripStatusLabel1;
         private TextBox textFilter;
         private Button buttonClearFilter;
+        private Button buttonAddSection;
+        private ToolStripMenuItem newFileToolStripMenuItem;
     }
 }
