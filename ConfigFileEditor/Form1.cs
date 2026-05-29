@@ -36,6 +36,11 @@ namespace ConfigFileEditor
 
         private void NewFile()
         {
+            if (!string.IsNullOrEmpty(textFilter?.Text))
+            {
+                textFilter.Text = "";
+            }
+
             this.Text = "New Configuration File";
             UpdateStatus("New Configuration");
         }
@@ -599,7 +604,7 @@ namespace ConfigFileEditor
             this.Text = this.Text.Replace("*", "");
         }
 
-        private void LoadFile(string path)
+        private async void LoadFile(string path)
         {
             if (string.IsNullOrEmpty(path)) return;
 
@@ -686,14 +691,20 @@ namespace ConfigFileEditor
             // --- THE MAGIC TOUCH ---
             // Now that iniStructure is perfectly built, let the helper generate the dictionary!
             RebuildSectionsDictionary();
-            UpdateTreeView();
 
             AddToMru(path);
             UpdateStatus($"File Loaded: {path}");
             this.Text = "Editing " + path;
             currentFilePath = path;
 
-            // buttonAddSection.Enabled = true;
+            string query = textFilter?.Text.Trim().ToLower() ?? "";
+            if (query == "")
+            {
+                UpdateTreeView();
+                return;
+            }
+
+            await ExecuteSearchAsync(query, "File Loaded. ");
         }
 
         private void SaveFile()
@@ -951,33 +962,34 @@ namespace ConfigFileEditor
         private async void SearchDebounceTimer_Tick(object? sender, EventArgs e)
         {
             if (searchDebounceTimer == null || textFilter == null) return;
-            searchDebounceTimer.Stop(); // Stop the timer so it doesn't loop
+            searchDebounceTimer.Stop(); 
 
-            // 1. Cancel the previous background search if it's still running
+            string query = textFilter.Text.Trim().ToLower();
+            await ExecuteSearchAsync(query, "");
+        }
+
+        private async Task ExecuteSearchAsync(string query, string status)
+        {
+            // 1. Cancel any previous background search running
             searchCancellationTokenSource?.Cancel();
             searchCancellationTokenSource = new CancellationTokenSource();
             var token = searchCancellationTokenSource.Token;
 
-            string query = textFilter.Text.Trim().ToLower();
-
-            // --- PHASE 1: BACKGROUND SEARCH ---
-            UpdateStatus("Searching...");
             isSearchRunning = true;
+            UpdateStatus((status ?? "") + "Searching...");
 
             try
             {
-                // Offload the heavy string-matching loops to a background worker thread
+                // 2. Offload the heavy matching loop to a background thread
                 List<IniEntry> filteredResults = await Task.Run(() => PerformBackgroundFilter(query, token), token);
 
-                // --- PHASE 2: SAFE UI THREAD UPDATE ---
-                // The background thread finished cleanly! Let's render the matching results.
+                // 3. Update the UI thread instantly using BeginUpdate/EndUpdate
                 PopulateTreeWithFilteredData(filteredResults, !string.IsNullOrEmpty(query));
-                UpdateStatus(string.IsNullOrEmpty(query) ? "Ready." : $"Found results matching '{query}'.");
+                UpdateStatus((status ?? "") + (string.IsNullOrEmpty(query) ? "Ready." : $"Found results matching '{query}'."));
             }
             catch (OperationCanceledException)
             {
-                // Task was cancelled because the user typed a new character.
-                // Silently swallow this exception; the next keystroke's thread is already taking over.
+                // Silently swallow if a newer keystroke or action takes over
             }
             finally
             {
