@@ -11,14 +11,27 @@ namespace ConfigFileEditor
         private List<IniEntry> iniStructure = new List<IniEntry>();
         private Dictionary<string, Dictionary<string, string>> sections = new Dictionary<string, Dictionary<string, string>>();
 
+        private System.Windows.Forms.Timer? searchDebounceTimer;
+        private CancellationTokenSource? searchCancellationTokenSource;
+        private bool isSearchRunning = false;
+
         public Form1()
         {
             InitializeComponent();
             LoadMruList();
             EnableTreeViewDragDrop();
             NewFile();
+            InitDebounceTimer();
 
             this.FormClosing += Form1_FormClosing;
+        }
+
+        private void InitDebounceTimer()
+        {
+            // Set up the debounce timer
+            searchDebounceTimer = new System.Windows.Forms.Timer();
+            searchDebounceTimer.Interval = 300; // milliseconds delay
+            searchDebounceTimer.Tick += SearchDebounceTimer_Tick;
         }
 
         private void NewFile()
@@ -96,7 +109,7 @@ namespace ConfigFileEditor
         private void treeView1_ItemDrag(object? sender, ItemDragEventArgs e)
         {
             // Prevent dragging if a search filter is currently applied
-            if (!string.IsNullOrEmpty(textFilter.Text)) return;
+            if (!string.IsNullOrEmpty(textFilter.Text) || isSearchRunning) return;
 
             if (e.Button == MouseButtons.Left && e.Item != null)
             {
@@ -926,8 +939,162 @@ namespace ConfigFileEditor
 
         private void textFilter_TextChanged(object sender, EventArgs e)
         {
-            if (textFilter == null) return;
-            UpdateTreeView(textFilter.Text);
+            if (searchDebounceTimer == null) return;
+
+            // Stop the timer if it's currently counting down from a previous keystroke
+            searchDebounceTimer.Stop();
+
+            // Start a fresh 300ms countdown
+            searchDebounceTimer.Start();
+        }
+
+        private async void SearchDebounceTimer_Tick(object? sender, EventArgs e)
+        {
+            if (searchDebounceTimer == null || textFilter == null) return;
+            searchDebounceTimer.Stop(); // Stop the timer so it doesn't loop
+
+            // 1. Cancel the previous background search if it's still running
+            searchCancellationTokenSource?.Cancel();
+            searchCancellationTokenSource = new CancellationTokenSource();
+            var token = searchCancellationTokenSource.Token;
+
+            string query = textFilter.Text.Trim().ToLower();
+
+            // --- PHASE 1: BACKGROUND SEARCH ---
+            UpdateStatus("Searching...");
+            isSearchRunning = true;
+
+            try
+            {
+                // Offload the heavy string-matching loops to a background worker thread
+                List<IniEntry> filteredResults = await Task.Run(() => PerformBackgroundFilter(query, token), token);
+
+                // --- PHASE 2: SAFE UI THREAD UPDATE ---
+                // The background thread finished cleanly! Let's render the matching results.
+                PopulateTreeWithFilteredData(filteredResults, !string.IsNullOrEmpty(query));
+                UpdateStatus(string.IsNullOrEmpty(query) ? "Ready." : $"Found results matching '{query}'.");
+            }
+            catch (OperationCanceledException)
+            {
+                // Task was cancelled because the user typed a new character.
+                // Silently swallow this exception; the next keystroke's thread is already taking over.
+            }
+            finally
+            {
+                isSearchRunning = false;
+            }
+        }
+
+        private List<IniEntry> PerformBackgroundFilter(string query, CancellationToken token)
+        {
+            List<IniEntry> filteredList = new List<IniEntry>();
+            if (string.IsNullOrEmpty(query))
+            {
+                return new List<IniEntry>(iniStructure);
+            }
+
+            SectionEntry? activeSection = null;
+            List<IniEntry> temporarySectionItems = new List<IniEntry>();
+            bool includeEntireSection = false;
+
+            foreach (var entry in iniStructure)
+            {
+                token.ThrowIfCancellationRequested();
+
+                if (entry is SectionEntry sectionEntry)
+                {
+                    // First, flush the previous section if it qualified for the results
+                    if (activeSection != null && (includeEntireSection || temporarySectionItems.Count > 0))
+                    {
+                        filteredList.Add(activeSection);
+                        filteredList.AddRange(temporarySectionItems);
+                    }
+
+                    // Set up the context for the new section header
+                    activeSection = sectionEntry;
+                    temporarySectionItems.Clear();
+                    
+                    // Core Fix: Check if the section name itself matches the search query
+                    includeEntireSection = sectionEntry.SectionName.ToLower().Contains(query);
+                    continue;
+                }
+
+                // If the section name was a match, pull in absolutely everything inside it
+                if (includeEntireSection)
+                {
+                    temporarySectionItems.Add(entry);
+                    continue;
+                }
+
+                // Otherwise, fallback to checking individual settings/comments
+                if (entry is SettingEntry settingEntry)
+                {
+                    if (settingEntry.Key.ToLower().Contains(query) || settingEntry.Value.ToLower().Contains(query))
+                    {
+                        temporarySectionItems.Add(settingEntry);
+                    }
+                }
+                else if (entry is CommentEntry commentEntry)
+                {
+                    if (commentEntry.RawLine.ToLower().Contains(query))
+                    {
+                        temporarySectionItems.Add(commentEntry);
+                    }
+                }
+            }
+
+            // Flush the final remaining section block out of the loop safely
+            if (activeSection != null && (includeEntireSection || temporarySectionItems.Count > 0))
+            {
+                filteredList.Add(activeSection);
+                filteredList.AddRange(temporarySectionItems);
+            }
+
+            return filteredList;
+        }
+
+        private void PopulateTreeWithFilteredData(List<IniEntry> filteredItems, bool isSearching)
+        {
+            // Crucial Performance Boost: Freeze the TreeView control drawing engine
+            treeViewConfigOptions.BeginUpdate();
+            treeViewConfigOptions.Nodes.Clear();
+
+            TreeNode? currentSectionNode = null;
+
+            foreach (var entry in filteredItems)
+            {
+                if (entry is SectionEntry sectionEntry)
+                {
+                    currentSectionNode = treeViewConfigOptions.Nodes.Add(sectionEntry.SectionName, sectionEntry.SectionName);
+                    currentSectionNode.Tag = sectionEntry;
+                    
+                    if (isSearching) currentSectionNode.Expand(); // Instantly show matching items
+                }
+                else if (currentSectionNode != null)
+                {
+                    if (entry is SettingEntry settingEntry)
+                    {
+                        string nodeText = settingEntry.IsCommentedOut ? $"; {settingEntry.Key}" : settingEntry.Key;
+                        TreeNode settingNode = currentSectionNode.Nodes.Add(settingEntry.Key, nodeText);
+                        settingNode.Tag = settingEntry;
+                    }
+                    else if (entry is CommentEntry commentEntry)
+                    {
+                        TreeNode commentNode = currentSectionNode.Nodes.Add(commentEntry.RawLine);
+                        commentNode.Tag = commentEntry;
+                    }
+                }
+            }
+
+            // Automatically highlight the first result
+            if (treeViewConfigOptions.Nodes.Count > 0)
+            {
+                TreeNode firstNode = treeViewConfigOptions.Nodes[0];
+                treeViewConfigOptions.SelectedNode = firstNode.Nodes.Count > 0 ? firstNode.Nodes[0] : firstNode;
+            }
+
+            // Unfreeze the UI engine and paint the changes all at once to the screen
+            treeViewConfigOptions.EndUpdate();
         }
 
         private void buttonClearFilter_Click(object sender, EventArgs e)
