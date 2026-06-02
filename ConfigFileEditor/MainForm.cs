@@ -5,7 +5,7 @@ using System.Windows.Forms;
 
 namespace ConfigFileEditor
 {
-    public partial class Form1 : Form
+    public partial class MainForm : Form
     {
         private string? currentFilePath = null;
         private List<IniEntry> iniStructure = new List<IniEntry>();
@@ -15,7 +15,7 @@ namespace ConfigFileEditor
         private CancellationTokenSource? searchCancellationTokenSource;
         private bool isSearchRunning = false;
 
-        public Form1()
+        public MainForm()
         {
             InitializeComponent();
             LoadMruList();
@@ -295,9 +295,9 @@ namespace ConfigFileEditor
 
         private void openToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            if (openFileDialog1.ShowDialog() == DialogResult.OK)
+            if (openINIFileDialog.ShowDialog() == DialogResult.OK)
             {
-                LoadFile(openFileDialog1.FileName);
+                LoadFile(openINIFileDialog.FileName);
             }
         }
 
@@ -305,9 +305,9 @@ namespace ConfigFileEditor
         {
             if (string.IsNullOrEmpty(currentFilePath))
             {
-                if (saveFileDialog1.ShowDialog() == DialogResult.OK)
+                if (saveINIFileDialog.ShowDialog() == DialogResult.OK)
                 {
-                    currentFilePath = saveFileDialog1.FileName;
+                    currentFilePath = saveINIFileDialog.FileName;
                 }
                 else
                 {
@@ -838,13 +838,13 @@ namespace ConfigFileEditor
 
         private void UpdateStatus(string message)
         {
-            toolStripStatusLabel1.Text = $"{DateTime.Now.ToShortTimeString()} - {message}";
+            toolStripStatusBarLabel.Text = $"{DateTime.Now.ToShortTimeString()} - {message}";
 
             // Optional: Reset the text after 5 seconds so it doesn't look stale
             var timer = new System.Windows.Forms.Timer { Interval = 5000 };
             timer.Tick += (s, e) =>
             {
-                toolStripStatusLabel1.Text = "Ready";
+                toolStripStatusBarLabel.Text = "Ready";
                 timer.Stop();
                 timer.Dispose();
             };

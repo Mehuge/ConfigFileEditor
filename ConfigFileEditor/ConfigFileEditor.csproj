@@ -7,14 +7,10 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Title>Config File Editor</Title>
-    <ApplicationIcon>ConfigFileEditor.ico</ApplicationIcon>
+    <ApplicationIcon>Config File Editor Icon.ico</ApplicationIcon>
     <PackageIcon>Config File Editor Icon.png</PackageIcon>
     <VersionPrefix>1.0.0</VersionPrefix>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Content Include="ConfigFileEditor.ico" />
-  </ItemGroup>
 
   <ItemGroup>
     <None Update="Config File Editor Icon.png">

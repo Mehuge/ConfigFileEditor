@@ -1,6 +1,6 @@
 namespace ConfigFileEditor
 {
-    partial class Form1
+    partial class MainForm
     {
         /// <summary>
         ///  Required designer variable.
@@ -28,9 +28,10 @@ namespace ConfigFileEditor
         /// </summary>
         private void InitializeComponent()
         {
-            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             menuStrip1 = new MenuStrip();
             fileToolStripMenuItem = new ToolStripMenuItem();
+            newFileToolStripMenuItem = new ToolStripMenuItem();
             openToolStripMenuItem = new ToolStripMenuItem();
             saveToolStripMenuItem = new ToolStripMenuItem();
             exitToolStripMenuItem = new ToolStripMenuItem();
@@ -43,21 +44,20 @@ namespace ConfigFileEditor
             value = new TextBox();
             buttonAddSetting = new Button();
             buttonRemoveSetting = new Button();
-            openFileDialog1 = new OpenFileDialog();
-            saveFileDialog1 = new SaveFileDialog();
+            openINIFileDialog = new OpenFileDialog();
+            saveINIFileDialog = new SaveFileDialog();
             sectionLabel = new Label();
             keyLabel = new Label();
             commentCheckBox = new CheckBox();
             sectionName = new TextBox();
             keyName = new TextBox();
-            statusStrip1 = new StatusStrip();
-            toolStripStatusLabel1 = new ToolStripStatusLabel();
+            statusBarStrip = new StatusStrip();
+            toolStripStatusBarLabel = new ToolStripStatusLabel();
             textFilter = new TextBox();
             buttonClearFilter = new Button();
             buttonAddSection = new Button();
-            newFileToolStripMenuItem = new ToolStripMenuItem();
             menuStrip1.SuspendLayout();
-            statusStrip1.SuspendLayout();
+            statusBarStrip.SuspendLayout();
             SuspendLayout();
             // 
             // menuStrip1
@@ -78,24 +78,31 @@ namespace ConfigFileEditor
             fileToolStripMenuItem.Size = new Size(46, 24);
             fileToolStripMenuItem.Text = "File";
             // 
+            // newFileToolStripMenuItem
+            // 
+            newFileToolStripMenuItem.Name = "newFileToolStripMenuItem";
+            newFileToolStripMenuItem.Size = new Size(149, 26);
+            newFileToolStripMenuItem.Text = "New File";
+            newFileToolStripMenuItem.Click += newFileToolStripMenuItem_Click;
+            // 
             // openToolStripMenuItem
             // 
             openToolStripMenuItem.Name = "openToolStripMenuItem";
-            openToolStripMenuItem.Size = new Size(224, 26);
+            openToolStripMenuItem.Size = new Size(149, 26);
             openToolStripMenuItem.Text = "Open";
             openToolStripMenuItem.Click += openToolStripMenuItem_Click;
             // 
             // saveToolStripMenuItem
             // 
             saveToolStripMenuItem.Name = "saveToolStripMenuItem";
-            saveToolStripMenuItem.Size = new Size(224, 26);
+            saveToolStripMenuItem.Size = new Size(149, 26);
             saveToolStripMenuItem.Text = "Save";
             saveToolStripMenuItem.Click += saveToolStripMenuItem_Click;
             // 
             // exitToolStripMenuItem
             // 
             exitToolStripMenuItem.Name = "exitToolStripMenuItem";
-            exitToolStripMenuItem.Size = new Size(224, 26);
+            exitToolStripMenuItem.Size = new Size(149, 26);
             exitToolStripMenuItem.Text = "Exit";
             exitToolStripMenuItem.Click += exitToolStripMenuItem_Click;
             // 
@@ -178,13 +185,13 @@ namespace ConfigFileEditor
             buttonRemoveSetting.UseVisualStyleBackColor = true;
             buttonRemoveSetting.Click += buttonRemove_Click;
             // 
-            // openFileDialog1
+            // openINIFileDialog
             // 
-            openFileDialog1.Filter = "INI files (*.conf)|*.conf|All files (*.*)|*.*";
+            openINIFileDialog.Filter = "INI files (*.conf)|*.conf|All files (*.*)|*.*";
             // 
-            // saveFileDialog1
+            // saveINIFileDialog
             // 
-            saveFileDialog1.Filter = "INI files (*.conf)|*.conf|All files (*.*)|*.*";
+            saveINIFileDialog.Filter = "INI files (*.conf)|*.conf|All files (*.*)|*.*";
             // 
             // sectionLabel
             // 
@@ -238,20 +245,20 @@ namespace ConfigFileEditor
             keyName.Size = new Size(520, 20);
             keyName.TabIndex = 10;
             // 
-            // statusStrip1
+            // statusBarStrip
             // 
-            statusStrip1.ImageScalingSize = new Size(20, 20);
-            statusStrip1.Items.AddRange(new ToolStripItem[] { toolStripStatusLabel1 });
-            statusStrip1.Location = new Point(0, 578);
-            statusStrip1.Name = "statusStrip1";
-            statusStrip1.Size = new Size(914, 22);
-            statusStrip1.TabIndex = 11;
-            statusStrip1.Text = "statusStrip1";
+            statusBarStrip.ImageScalingSize = new Size(20, 20);
+            statusBarStrip.Items.AddRange(new ToolStripItem[] { toolStripStatusBarLabel });
+            statusBarStrip.Location = new Point(0, 576);
+            statusBarStrip.Name = "statusBarStrip";
+            statusBarStrip.Size = new Size(914, 24);
+            statusBarStrip.TabIndex = 11;
+            statusBarStrip.Text = "statusStrip1";
             // 
-            // toolStripStatusLabel1
+            // toolStripStatusBarLabel
             // 
-            toolStripStatusLabel1.Name = "toolStripStatusLabel1";
-            toolStripStatusLabel1.Size = new Size(0, 16);
+            toolStripStatusBarLabel.Name = "toolStripStatusBarLabel";
+            toolStripStatusBarLabel.Size = new Size(0, 18);
             // 
             // textFilter
             // 
@@ -287,14 +294,7 @@ namespace ConfigFileEditor
             buttonAddSection.UseVisualStyleBackColor = true;
             buttonAddSection.Click += buttonAddSection_Click;
             // 
-            // newFileToolStripMenuItem
-            // 
-            newFileToolStripMenuItem.Name = "newFileToolStripMenuItem";
-            newFileToolStripMenuItem.Size = new Size(224, 26);
-            newFileToolStripMenuItem.Text = "New File";
-            newFileToolStripMenuItem.Click += newFileToolStripMenuItem_Click;
-            // 
-            // Form1
+            // MainForm
             // 
             AutoScaleDimensions = new SizeF(8F, 20F);
             AutoScaleMode = AutoScaleMode.Font;
@@ -302,7 +302,7 @@ namespace ConfigFileEditor
             Controls.Add(buttonAddSection);
             Controls.Add(buttonClearFilter);
             Controls.Add(textFilter);
-            Controls.Add(statusStrip1);
+            Controls.Add(statusBarStrip);
             Controls.Add(keyName);
             Controls.Add(sectionName);
             Controls.Add(commentCheckBox);
@@ -317,12 +317,12 @@ namespace ConfigFileEditor
             Icon = (Icon)resources.GetObject("$this.Icon");
             MainMenuStrip = menuStrip1;
             Margin = new Padding(3, 4, 3, 4);
-            Name = "Form1";
+            Name = "MainForm";
             Text = "Config File Editor";
             menuStrip1.ResumeLayout(false);
             menuStrip1.PerformLayout();
-            statusStrip1.ResumeLayout(false);
-            statusStrip1.PerformLayout();
+            statusBarStrip.ResumeLayout(false);
+            statusBarStrip.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
 
@@ -344,15 +344,15 @@ namespace ConfigFileEditor
         private System.Windows.Forms.TextBox value;
         private System.Windows.Forms.Button buttonAddSetting;
         private System.Windows.Forms.Button buttonRemoveSetting;
-        private System.Windows.Forms.OpenFileDialog openFileDialog1;
-        private System.Windows.Forms.SaveFileDialog saveFileDialog1;
+        private System.Windows.Forms.OpenFileDialog openINIFileDialog;
+        private System.Windows.Forms.SaveFileDialog saveINIFileDialog;
         private System.Windows.Forms.Label sectionLabel;
         private System.Windows.Forms.Label keyLabel;
         private System.Windows.Forms.CheckBox commentCheckBox;
         private TextBox sectionName;
         private TextBox keyName;
-        private StatusStrip statusStrip1;
-        private ToolStripStatusLabel toolStripStatusLabel1;
+        private StatusStrip statusBarStrip;
+        private ToolStripStatusLabel toolStripStatusBarLabel;
         private TextBox textFilter;
         private Button buttonClearFilter;
         private Button buttonAddSection;
