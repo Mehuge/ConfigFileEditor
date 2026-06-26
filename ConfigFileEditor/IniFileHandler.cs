@@ -74,25 +74,33 @@ namespace ConfigFileEditor
                 throw new InvalidOperationException("File path is not set. Use SaveFileAs for new files.");
             }
 
-            List<string> lines = new List<string>();
-            foreach (var entry in IniStructure)
+            var lines = new List<string>();
+            for (int i = 0; i < IniStructure.Count; i++)
             {
+                var entry = IniStructure[i];
+
                 if (entry is SectionEntry se)
                 {
-                    if (se.RawLine != "") lines.Add(se.RawLine);
+                    // This check is important for implicit sections that have no raw line
+                    if (!string.IsNullOrEmpty(se.RawLine))
+                    {
+                        // If this isn't the first line and the previous entry wasn't a blank line, add one.
+                        if (i > 0 && !(IniStructure[i - 1] is BlankLineEntry))
+                        {
+                            lines.Add("");
+                        }
+                        lines.Add(se.RawLine);
+                    }
                 }
                 else if (entry is SettingEntry st)
                 {
                     string prefix = st.IsCommentedOut ? "; " : "";
                     lines.Add($"{prefix}{st.Key}={st.Value}");
                 }
-                else if (entry is CommentEntry ce)
+                else if (entry is CommentEntry or BlankLineEntry)
                 {
-                    lines.Add(ce.RawLine);
-                }
-                else if (entry is BlankLineEntry be)
-                {
-                    lines.Add(be.RawLine);
+                    // For comments and existing blank lines, just add their raw content.
+                    lines.Add((entry as dynamic).RawLine);
                 }
             }
 
