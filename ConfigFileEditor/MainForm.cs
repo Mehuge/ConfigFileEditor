@@ -8,8 +8,7 @@ namespace ConfigFileEditor
     public partial class MainForm : Form
     {
         private string? currentFilePath = null;
-        private List<IniEntry> iniStructure = new List<IniEntry>();
-        private Dictionary<string, Dictionary<string, string>> sections = new Dictionary<string, Dictionary<string, string>>();
+        private readonly IniFileHandler _iniFileHandler = new IniFileHandler();
 
         private System.Windows.Forms.Timer? searchDebounceTimer;
         private CancellationTokenSource? searchCancellationTokenSource;
@@ -47,7 +46,7 @@ namespace ConfigFileEditor
 
         private DialogResult CheckUnsavedChanges()
         {
-            if (!this.Text.EndsWith("*")) return DialogResult.None;
+            if (!_iniFileHandler.IsDirty) return DialogResult.None;
 
             // Prompt to save changes
             DialogResult result = MessageBox.Show(
@@ -79,11 +78,9 @@ namespace ConfigFileEditor
             if (result == DialogResult.Cancel) return;
 
             // Reset everything to a clean, blank slate
-            iniStructure.Clear();
-            sections.Clear();
+            _iniFileHandler.NewFile();
             treeViewConfigOptions.Nodes.Clear();
-            
-            currentFilePath = null; 
+            currentFilePath = null;
             
             // Reset detail panels
             sectionName.Text = "";
@@ -170,14 +167,15 @@ namespace ConfigFileEditor
 
             // --- STEP 1: Update the single source of truth (iniStructure) ---
 
-            if (draggedNode.Level == 0 && targetNode.Level == 0)
+            if (draggedNode.Level == 0 && targetNode.Level == 0 && 
+                draggedEntry is SectionEntry draggedSection && targetEntry is SectionEntry targetSection)
             {
                 // CASE A: Moving a Section. We must move the SectionEntry AND all its settings/comments block.
-                MoveSectionInDataStructure(draggedNode, targetNode);
+                _iniFileHandler.MoveSectionInDataStructure(draggedSection, targetSection);
             }
             else if (draggedNode.Level == 1)
             {
-                // CASE B: Moving an Option/Comment within or between sections.
+                var iniStructure = _iniFileHandler.IniStructure;
 
                 // Find where the dragged entry currently lives and pull it out
                 iniStructure.Remove(draggedEntry);
@@ -220,77 +218,10 @@ namespace ConfigFileEditor
             treeViewConfigOptions.SelectedNode = draggedNode;
 
             // --- STEP 3: Rebuild the fast-lookup Dictionary ---
-            RebuildSectionsDictionary();
+            _iniFileHandler.RebuildSectionsDictionary();
 
             // --- STEP 4: Mark as changed
             MarkChanged();
-        }
-
-        private void MoveSectionInDataStructure(TreeNode draggedSectionNode, TreeNode targetSectionNode)
-        {
-            SectionEntry? draggedSection = draggedSectionNode.Tag as SectionEntry;
-            SectionEntry? targetSection = targetSectionNode.Tag as SectionEntry;
-
-            if (draggedSection == null || targetSection == null) return;
-
-            // 1. Gather the entire contiguous block of IniEntries belonging to the dragged section
-            int startIdx = iniStructure.IndexOf(draggedSection);
-            List<IniEntry> blockToMove = new List<IniEntry>();
-
-            // Read forward from the section header until we hit the next section header
-            for (int i = startIdx; i < iniStructure.Count; i++)
-            {
-                if (i > startIdx && iniStructure[i] is SectionEntry)
-                    break;
-                blockToMove.Add(iniStructure[i]);
-            }
-
-            // 2. Remove that block from the data structure
-            foreach (var entry in blockToMove)
-            {
-                iniStructure.Remove(entry);
-            }
-
-            // 3. Find the new target index to insert the block
-            int targetIdx = iniStructure.IndexOf(targetSection);
-
-            // Insert the whole block back in chunk-by-chunk
-            for (int i = 0; i < blockToMove.Count; i++)
-            {
-                iniStructure.Insert(targetIdx + i, blockToMove[i]);
-            }
-        }
-
-        private void RebuildSectionsDictionary()
-        {
-            sections.Clear();
-            string currentSectionName = "[Default]";
-
-            foreach (var entry in iniStructure)
-            {
-                if (entry is SectionEntry sectionEntry)
-                {
-                    currentSectionName = sectionEntry.SectionName;
-                    if (!sections.ContainsKey(currentSectionName))
-                    {
-                        sections[currentSectionName] = new Dictionary<string, string>();
-                    }
-                }
-                else if (entry is SettingEntry settingEntry)
-                {
-                    // Ensure section container exists in the dictionary
-                    if (!sections.ContainsKey(currentSectionName))
-                    {
-                        sections[currentSectionName] = new Dictionary<string, string>();
-                    }
-
-                    // Only index active settings, or adjust rules if you want commented ones skipped
-                    if (!settingEntry.IsCommentedOut)
-                    {
-                        sections[currentSectionName][settingEntry.Key] = settingEntry.Value;
-                    }
-                }
-            }
         }
 
         private void openToolStripMenuItem_Click(object sender, EventArgs e)
@@ -400,9 +331,9 @@ namespace ConfigFileEditor
                     {
                         string sectionName = treeViewConfigOptions.SelectedNode.Parent.Name;
                         string settingName = treeViewConfigOptions.SelectedNode.Name;
-                        if (sections.ContainsKey(sectionName) && sections[sectionName].ContainsKey(settingName))
+                        if (_iniFileHandler.Sections.ContainsKey(sectionName) && _iniFileHandler.Sections[sectionName].ContainsKey(settingName))
                         {
-                            sections[sectionName][settingName] = value.Text;
+                            _iniFileHandler.Sections[sectionName][settingName] = value.Text;
                         }
                     }
                 }
@@ -425,9 +356,9 @@ namespace ConfigFileEditor
                 else
                 {
                     sectionNode = treeViewConfigOptions.Nodes.Add(sectionName, sectionName);
-                    if (!sections.ContainsKey(sectionName))
+                    if (!_iniFileHandler.Sections.ContainsKey(sectionName))
                     {
-                        sections[sectionName] = new Dictionary<string, string>();
+                        _iniFileHandler.Sections[sectionName] = new Dictionary<string, string>();
                     }
                 }
             }
@@ -452,17 +383,18 @@ namespace ConfigFileEditor
                     if (!string.IsNullOrEmpty(settingName) && settingValue != null)
                     {
                         // 1. Update data structures
-                        if (!sections.ContainsKey(sectionName))
+                        if (!_iniFileHandler.Sections.ContainsKey(sectionName))
                         {
-                            sections[sectionName] = new Dictionary<string, string>();
+                            _iniFileHandler.Sections[sectionName] = new Dictionary<string, string>();
                         }
-                        sections[sectionName][settingName] = settingValue;
+                        _iniFileHandler.Sections[sectionName][settingName] = settingValue;
                         var newSetting = new SettingEntry { Key = settingName, Value = settingValue };
+                        var iniStructure = _iniFileHandler.IniStructure;
 
                         // 2. Find the correct insertion index in iniStructure
                         int insertIndex = -1;
 
-                        // Find the section entry
+                        // Find the section entry in the main structure
                         int sectionEntryIndex = -1;
                         for (int i = 0; i < iniStructure.Count; i++)
                         {
@@ -580,11 +512,11 @@ namespace ConfigFileEditor
                 string settingName = treeViewConfigOptions.SelectedNode.Name;
 
                 // 1. Remove from data structures
-                if (sections.ContainsKey(sectionName))
+                if (_iniFileHandler.Sections.ContainsKey(sectionName))
                 {
-                    sections[sectionName].Remove(settingName);
+                    _iniFileHandler.Sections[sectionName].Remove(settingName);
                 }
-                iniStructure.Remove(settingEntry);
+                _iniFileHandler.IniStructure.Remove(settingEntry);
 
                 // 2. Remove from UI
                 treeViewConfigOptions.SelectedNode.Remove();
@@ -595,22 +527,22 @@ namespace ConfigFileEditor
 
         private void MarkChanged()
         {
+            _iniFileHandler.MarkDirty();
             if (this.Text.EndsWith("*")) return;
             this.Text += "*";
         }
 
         private void ClearChanged()
         {
+            _iniFileHandler.ClearDirty();
             this.Text = this.Text.Replace("*", "");
         }
 
         private async void LoadFile(string path)
         {
             if (string.IsNullOrEmpty(path)) return;
-
-            iniStructure.Clear();
+            
             treeViewConfigOptions.Nodes.Clear();
-            sections.Clear(); // Still clear it at the start
 
             // Clear detail panel
             sectionName.Text = "";
@@ -620,78 +552,54 @@ namespace ConfigFileEditor
             buttonAddSetting.Enabled = true;
             buttonRemoveSetting.Enabled = false;
 
+            _iniFileHandler.LoadFile(path);
+
             TreeNode? currentSectionNode = null;
             string currentSectionName = "[Default]";
 
-            foreach (string line in File.ReadAllLines(path))
+            foreach (var entry in _iniFileHandler.IniStructure)
             {
-                string trimmedLine = line.Trim();
-
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
+                if (entry is SectionEntry sectionEntry)
                 {
-                    currentSectionName = trimmedLine.Substring(1, trimmedLine.Length - 2);
-
-                    var sectionEntry = new SectionEntry { SectionName = currentSectionName, RawLine = line };
-                    iniStructure.Add(sectionEntry);
-
+                    currentSectionName = sectionEntry.SectionName;
                     currentSectionNode = treeViewConfigOptions.Nodes.Add(currentSectionName, currentSectionName);
                     currentSectionNode.Tag = sectionEntry;
                 }
-                else
+                else if (entry is SettingEntry settingEntry)
                 {
-                    bool isCommented = trimmedLine.StartsWith(";") || trimmedLine.StartsWith("#");
-                    string potentialSettingLine = isCommented ? trimmedLine.Substring(1).Trim() : trimmedLine;
-
-                    if (potentialSettingLine.Contains("="))
+                    // If a setting appears before any explicit section, ensure a [Default] node exists
+                    if (currentSectionNode == null || currentSectionNode.Text != currentSectionName)
                     {
-                        string[] parts = potentialSettingLine.Split(new[] { '=' }, 2);
-                        string key = parts[0].Trim();
-                        string val = parts[1].Trim(); // renamed 'value' to 'val' to avoid collision with textBox 'value'
-
-                        // If a setting appears before any explicit section, ensure a [Default] node exists
-                        if (currentSectionNode == null)
+                        // This case handles settings that appear before the first [Section]
+                        currentSectionName = "[Default]";
+                        var defaultNode = treeViewConfigOptions.Nodes["[Default]"];
+                        if (defaultNode == null)
                         {
-                            var defaultSection = new SectionEntry { SectionName = "[Default]", RawLine = "" };
-                            iniStructure.Add(defaultSection);
-                            currentSectionNode = treeViewConfigOptions.Nodes.Add("[Default]", "[Default]");
-                            currentSectionNode.Tag = defaultSection;
+                             defaultNode = treeViewConfigOptions.Nodes.Add("[Default]", "[Default]");
+                             // We don't create a tag here as there's no explicit SectionEntry for the default section
                         }
-
-                        var settingEntry = new SettingEntry { Key = key, Value = val, IsCommentedOut = isCommented };
-                        iniStructure.Add(settingEntry);
-
-                        string nodeText = isCommented ? $"; {key}" : key;
-                        TreeNode settingNode = currentSectionNode.Nodes.Add(key, nodeText);
-                        settingNode.Tag = settingEntry;
+                        currentSectionNode = defaultNode;
                     }
-                    else if (isCommented)
-                    {
-                        var commentEntry = new CommentEntry { RawLine = line };
-                        iniStructure.Add(commentEntry);
 
-                        if (currentSectionNode != null)
-                        {
-                            TreeNode settingNode = currentSectionNode.Nodes.Add(line);
-                            settingNode.Tag = commentEntry;
-                        }
-                        else
-                        {
-                            currentSectionNode = treeViewConfigOptions.Nodes.Add(currentSectionName, line);
-                            currentSectionNode.Tag = commentEntry;
-                        }
-                    }
-                    else
-                    {
-                        var blankLineEntry = new BlankLineEntry { RawLine = line };
-                        iniStructure.Add(blankLineEntry);
-                    }
+                    string nodeText = settingEntry.IsCommentedOut ? $"; {settingEntry.Key}" : settingEntry.Key;
+                    TreeNode settingNode = currentSectionNode.Nodes.Add(settingEntry.Key, nodeText);
+                    settingNode.Tag = settingEntry;
+                }
+                else if (entry is CommentEntry commentEntry)
+                {
+                     if (currentSectionNode != null)
+                     {
+                         TreeNode commentNode = currentSectionNode.Nodes.Add(commentEntry.RawLine);
+                         commentNode.Tag = commentEntry;
+                     }
+                }
+                else if (entry is BlankLineEntry)
+                {
+                    // Blank lines are preserved in the data structure but not shown in the TreeView.
                 }
             }
 
-            // --- THE MAGIC TOUCH ---
-            // Now that iniStructure is perfectly built, let the helper generate the dictionary!
-            RebuildSectionsDictionary();
-
+            _iniFileHandler.RebuildSectionsDictionary();
             AddToMru(path);
             UpdateStatus($"File Loaded: {path}");
             this.Text = "Editing " + path;
@@ -715,29 +623,8 @@ namespace ConfigFileEditor
                 return;
             }
 
-            List<string> lines = new List<string>();
-            foreach (var entry in iniStructure)
-            {
-                if (entry is SectionEntry se)
-                {
-                    if (se.RawLine != "") lines.Add(se.RawLine);
-                }
-                else if (entry is SettingEntry st)
-                {
-                    string prefix = st.IsCommentedOut ? "; " : "";
-                    lines.Add($"{prefix}{st.Key}={st.Value}");
-                }
-                else if (entry is CommentEntry ce)
-                {
-                    lines.Add(ce.RawLine);
-                }
-                else if (entry is BlankLineEntry be)
-                {
-                    lines.Add(be.RawLine);
-                }
-            }
-
-            File.WriteAllLines(currentFilePath, lines);
+            _iniFileHandler.CurrentFilePath = currentFilePath;
+            _iniFileHandler.SaveFile();
             UpdateStatus($"File saved: {currentFilePath}");
             ClearChanged();
         }
@@ -861,7 +748,22 @@ namespace ConfigFileEditor
 
             TreeNode? currentSectionNode = null;
 
-            foreach (var entry in iniStructure)
+            // Special Handling for the [Default] section
+            // Check if there are any settings before the first explicit section
+            var firstSectionIndex = _iniFileHandler.IniStructure.FindIndex(e => e is SectionEntry);
+            var defaultSettingsExist = _iniFileHandler.IniStructure
+                .Take(firstSectionIndex == -1 ? _iniFileHandler.IniStructure.Count : firstSectionIndex)
+                .Any(e => e is SettingEntry || e is CommentEntry);
+
+            if (defaultSettingsExist)
+            {
+                // Create the [Default] node if it doesn't exist.
+                // It won't have a SectionEntry tag as it's implicit.
+                currentSectionNode = treeViewConfigOptions.Nodes.Add("[Default]", "[Default]");
+                currentSectionNode.Tag = new SectionEntry { SectionName = "[Default]", RawLine = "" }; // Use a dummy entry
+            }
+
+            foreach (var entry in _iniFileHandler.IniStructure)
             {
                 if (entry is SectionEntry sectionEntry)
                 {
@@ -878,8 +780,12 @@ namespace ConfigFileEditor
                     continue;
                 }
 
-                // We need a valid section node to attach children to. If none exists yet, skip.
-                if (currentSectionNode == null) continue;
+                // We need a valid section node to attach children to.
+                // This handles settings that fall under the implicit [Default] section.
+                if (currentSectionNode == null)
+                {
+                    continue; // Should not happen with the new default handling, but good for safety.
+                }
 
                 if (entry is SettingEntry settingEntry)
                 {
@@ -1002,14 +908,14 @@ namespace ConfigFileEditor
             List<IniEntry> filteredList = new List<IniEntry>();
             if (string.IsNullOrEmpty(query))
             {
-                return new List<IniEntry>(iniStructure);
+                return new List<IniEntry>(_iniFileHandler.IniStructure);
             }
 
             SectionEntry? activeSection = null;
             List<IniEntry> temporarySectionItems = new List<IniEntry>();
             bool includeEntireSection = false;
 
-            foreach (var entry in iniStructure)
+            foreach (var entry in _iniFileHandler.IniStructure)
             {
                 token.ThrowIfCancellationRequested();
 
@@ -1128,7 +1034,7 @@ namespace ConfigFileEditor
             newSectionName = newSectionName.Trim('[', ']');
 
             // 2. Prevent duplicate sections
-            if (sections.ContainsKey(newSectionName))
+            if (_iniFileHandler.Sections.ContainsKey(newSectionName))
             {
                 MessageBox.Show($"A section named [{newSectionName}] already exists.", "Duplicate Section", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
@@ -1142,10 +1048,10 @@ namespace ConfigFileEditor
             };
 
             // 4. Update the single source of truth (Append it to the end of the file structure)
-            iniStructure.Add(newSectionEntry);
+            _iniFileHandler.IniStructure.Add(newSectionEntry);
 
             // 5. Update the fast-lookup dictionary and refresh the visual tree
-            RebuildSectionsDictionary();
+            _iniFileHandler.RebuildSectionsDictionary();
             UpdateTreeView();
 
             // 6. Find and automatically select the newly created section in the UI
@@ -1201,34 +1107,5 @@ namespace ConfigFileEditor
             }
         }
 
-    }
-
-    // New classes for INI file structure
-    public abstract class IniEntry
-    {
-        // No common properties here, each derived class will handle its own representation
-    }
-
-    public class SectionEntry : IniEntry
-    {
-        public string SectionName { get; set; } = string.Empty;
-        public string RawLine { get; set; } = string.Empty; // To preserve original formatting
-    }
-
-    public class SettingEntry : IniEntry
-    {
-        public string Key { get; set; } = string.Empty;
-        public string Value { get; set; } = string.Empty;
-        public bool IsCommentedOut { get; set; } = false;
-    }
-
-    public class CommentEntry : IniEntry
-    {
-        public string RawLine { get; set; } = string.Empty; // To preserve original formatting
-    }
-
-    public class BlankLineEntry : IniEntry
-    {
-        public string RawLine { get; set; } = string.Empty; // To preserve original formatting
     }
 }
