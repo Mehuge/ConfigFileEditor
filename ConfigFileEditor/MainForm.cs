@@ -720,7 +720,7 @@ namespace ConfigFileEditor
             {
                 if (entry is SectionEntry se)
                 {
-                    lines.Add(se.RawLine);
+                    if (se.RawLine != "") lines.Add(se.RawLine);
                 }
                 else if (entry is SettingEntry st)
                 {
