@@ -100,7 +100,7 @@ namespace ConfigFileEditor
                 else if (entry is CommentEntry or BlankLineEntry)
                 {
                     // For comments and existing blank lines, just add their raw content.
-                    lines.Add((entry as dynamic).RawLine);
+                    lines.Add(entry.RawLine);
                 }
             }
 

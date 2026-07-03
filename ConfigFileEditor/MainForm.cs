@@ -11,6 +11,7 @@ namespace ConfigFileEditor
         private readonly IniFileHandler _iniFileHandler = new IniFileHandler();
 
         private System.Windows.Forms.Timer? searchDebounceTimer;
+        private System.Windows.Forms.Timer? _statusResetTimer;
         private CancellationTokenSource? searchCancellationTokenSource;
         private bool isSearchRunning = false;
 
@@ -541,8 +542,6 @@ namespace ConfigFileEditor
         private async void LoadFile(string path)
         {
             if (string.IsNullOrEmpty(path)) return;
-            
-            treeViewConfigOptions.Nodes.Clear();
 
             // Clear detail panel
             sectionName.Text = "";
@@ -554,52 +553,6 @@ namespace ConfigFileEditor
 
             _iniFileHandler.LoadFile(path);
 
-            TreeNode? currentSectionNode = null;
-            string currentSectionName = "[Default]";
-
-            foreach (var entry in _iniFileHandler.IniStructure)
-            {
-                if (entry is SectionEntry sectionEntry)
-                {
-                    currentSectionName = sectionEntry.SectionName;
-                    currentSectionNode = treeViewConfigOptions.Nodes.Add(currentSectionName, currentSectionName);
-                    currentSectionNode.Tag = sectionEntry;
-                }
-                else if (entry is SettingEntry settingEntry)
-                {
-                    // If a setting appears before any explicit section, ensure a [Default] node exists
-                    if (currentSectionNode == null || currentSectionNode.Text != currentSectionName)
-                    {
-                        // This case handles settings that appear before the first [Section]
-                        currentSectionName = "[Default]";
-                        var defaultNode = treeViewConfigOptions.Nodes["[Default]"];
-                        if (defaultNode == null)
-                        {
-                             defaultNode = treeViewConfigOptions.Nodes.Add("[Default]", "[Default]");
-                             // We don't create a tag here as there's no explicit SectionEntry for the default section
-                        }
-                        currentSectionNode = defaultNode;
-                    }
-
-                    string nodeText = settingEntry.IsCommentedOut ? $"; {settingEntry.Key}" : settingEntry.Key;
-                    TreeNode settingNode = currentSectionNode.Nodes.Add(settingEntry.Key, nodeText);
-                    settingNode.Tag = settingEntry;
-                }
-                else if (entry is CommentEntry commentEntry)
-                {
-                     if (currentSectionNode != null)
-                     {
-                         TreeNode commentNode = currentSectionNode.Nodes.Add(commentEntry.RawLine);
-                         commentNode.Tag = commentEntry;
-                     }
-                }
-                else if (entry is BlankLineEntry)
-                {
-                    // Blank lines are preserved in the data structure but not shown in the TreeView.
-                }
-            }
-
-            _iniFileHandler.RebuildSectionsDictionary();
             AddToMru(path);
             UpdateStatus($"File Loaded: {path}");
             this.Text = "Editing " + path;
@@ -660,7 +613,7 @@ namespace ConfigFileEditor
 
         // MRU
         private List<string> mruFiles = new List<string>();
-        private readonly string mruPath = Path.Combine(Application.StartupPath, "recent_files.json");
+        private readonly string mruPath = Path.Combine(Application.StartupPath, "recent_files.txt");
         private const int MaxMruItems = 5;
 
         private void LoadMruList()
@@ -727,15 +680,26 @@ namespace ConfigFileEditor
         {
             toolStripStatusBarLabel.Text = $"{DateTime.Now.ToShortTimeString()} - {message}";
 
-            // Optional: Reset the text after 5 seconds so it doesn't look stale
-            var timer = new System.Windows.Forms.Timer { Interval = 5000 };
-            timer.Tick += (s, e) =>
+            if (_statusResetTimer == null)
             {
-                toolStripStatusBarLabel.Text = "Ready";
-                timer.Stop();
-                timer.Dispose();
-            };
-            timer.Start();
+                _statusResetTimer = new System.Windows.Forms.Timer { Interval = 5000 };
+                _statusResetTimer.Tick += (s, e) =>
+                {
+                    toolStripStatusBarLabel.Text = "Ready";
+                    _statusResetTimer!.Stop();
+                };
+            }
+            _statusResetTimer.Stop();
+            _statusResetTimer.Start();
+        }
+
+        private TreeNode EnsureDefaultSectionNode()
+        {
+            var existing = treeViewConfigOptions.Nodes["[Default]"];
+            if (existing != null) return existing;
+            var node = treeViewConfigOptions.Nodes.Add("[Default]", "[Default]");
+            node.Tag = new SectionEntry { SectionName = "[Default]" };
+            return node;
         }
 
         private void UpdateTreeView(string searchTerm = "")
@@ -757,10 +721,7 @@ namespace ConfigFileEditor
 
             if (defaultSettingsExist)
             {
-                // Create the [Default] node if it doesn't exist.
-                // It won't have a SectionEntry tag as it's implicit.
-                currentSectionNode = treeViewConfigOptions.Nodes.Add("[Default]", "[Default]");
-                currentSectionNode.Tag = new SectionEntry { SectionName = "[Default]", RawLine = "" }; // Use a dummy entry
+                currentSectionNode = EnsureDefaultSectionNode();
             }
 
             foreach (var entry in _iniFileHandler.IniStructure)
@@ -884,6 +845,7 @@ namespace ConfigFileEditor
         {
             // 1. Cancel any previous background search running
             searchCancellationTokenSource?.Cancel();
+            searchCancellationTokenSource?.Dispose();
             searchCancellationTokenSource = new CancellationTokenSource();
             var token = searchCancellationTokenSource.Token;
 
@@ -1022,8 +984,7 @@ namespace ConfigFileEditor
 
             if (defaultSettingsExist)
             {
-                currentSectionNode = treeViewConfigOptions.Nodes.Add("[Default]", "[Default]");
-                currentSectionNode.Tag = new SectionEntry { SectionName = "[Default]", RawLine = "" };
+                currentSectionNode = EnsureDefaultSectionNode();
             }
 
             foreach (var entry in filteredItems)
