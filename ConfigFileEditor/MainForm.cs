@@ -868,9 +868,15 @@ namespace ConfigFileEditor
         private async void SearchDebounceTimer_Tick(object? sender, EventArgs e)
         {
             if (searchDebounceTimer == null || textFilter == null) return;
-            searchDebounceTimer.Stop(); 
+            searchDebounceTimer.Stop();
 
             string query = textFilter.Text.Trim().ToLower();
+            if (string.IsNullOrEmpty(query))
+            {
+                UpdateTreeView();
+                return;
+            }
+
             await ExecuteSearchAsync(query, "");
         }
 
@@ -915,12 +921,19 @@ namespace ConfigFileEditor
             List<IniEntry> temporarySectionItems = new List<IniEntry>();
             bool includeEntireSection = false;
 
+            // Separately collect items that belong to the implicit [Default] section
+            // (entries before the first explicit [Section] header)
+            bool passedFirstSection = false;
+            List<IniEntry> defaultSectionItems = new List<IniEntry>();
+
             foreach (var entry in _iniFileHandler.IniStructure)
             {
                 token.ThrowIfCancellationRequested();
 
                 if (entry is SectionEntry sectionEntry)
                 {
+                    passedFirstSection = true;
+
                     // First, flush the previous section if it qualified for the results
                     if (activeSection != null && (includeEntireSection || temporarySectionItems.Count > 0))
                     {
@@ -934,6 +947,22 @@ namespace ConfigFileEditor
                     
                     // Core Fix: Check if the section name itself matches the search query
                     includeEntireSection = sectionEntry.SectionName.ToLower().Contains(query);
+                    continue;
+                }
+
+                // Collect default section entries separately before the first explicit section
+                if (!passedFirstSection)
+                {
+                    if (entry is SettingEntry defaultSetting)
+                    {
+                        if (defaultSetting.Key.ToLower().Contains(query) || defaultSetting.Value.ToLower().Contains(query))
+                            defaultSectionItems.Add(defaultSetting);
+                    }
+                    else if (entry is CommentEntry defaultComment)
+                    {
+                        if (defaultComment.RawLine.ToLower().Contains(query))
+                            defaultSectionItems.Add(defaultComment);
+                    }
                     continue;
                 }
 
@@ -968,6 +997,11 @@ namespace ConfigFileEditor
                 filteredList.AddRange(temporarySectionItems);
             }
 
+            // Prepend any matching default-section items at the start of the results.
+            // PopulateTreeWithFilteredData will create the [Default] node for them automatically.
+            if (defaultSectionItems.Count > 0)
+                filteredList.InsertRange(0, defaultSectionItems);
+
             return filteredList;
         }
 
@@ -978,6 +1012,19 @@ namespace ConfigFileEditor
             treeViewConfigOptions.Nodes.Clear();
 
             TreeNode? currentSectionNode = null;
+
+            // Special Handling for the [Default] section
+            // Check if there are any settings/comments before the first explicit section in the filtered items
+            var firstSectionIndex = filteredItems.FindIndex(e => e is SectionEntry);
+            var defaultSettingsExist = filteredItems
+                .Take(firstSectionIndex == -1 ? filteredItems.Count : firstSectionIndex)
+                .Any(e => e is SettingEntry || e is CommentEntry);
+
+            if (defaultSettingsExist)
+            {
+                currentSectionNode = treeViewConfigOptions.Nodes.Add("[Default]", "[Default]");
+                currentSectionNode.Tag = new SectionEntry { SectionName = "[Default]", RawLine = "" };
+            }
 
             foreach (var entry in filteredItems)
             {
