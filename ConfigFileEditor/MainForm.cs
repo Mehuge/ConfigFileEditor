@@ -136,6 +136,8 @@ namespace ConfigFileEditor
             {
                 if (e.Control && e.KeyCode == Keys.C && treeViewConfigOptions.SelectedNode?.Tag is SectionEntry)
                     CopySectionToClipboard(treeViewConfigOptions.SelectedNode);
+                if (e.KeyCode == Keys.Delete && treeViewConfigOptions.SelectedNode?.Tag is SectionEntry)
+                    DeleteSectionNode(treeViewConfigOptions.SelectedNode, skipConfirmation: false);
             };
         }
 
