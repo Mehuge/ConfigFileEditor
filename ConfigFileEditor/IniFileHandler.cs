@@ -261,5 +261,33 @@ namespace ConfigFileEditor
 
         public void MarkDirty() => IsDirty = true;
         public void ClearDirty() => IsDirty = false;
+
+        public void DeleteSection(string sectionName)
+        {
+            bool isDefault = sectionName == DefaultSectionName;
+
+            if (isDefault)
+            {
+                // Remove all entries that precede the first explicit section header
+                int firstSectionIdx = IniStructure.FindIndex(e => e is SectionEntry);
+                int removeCount = firstSectionIdx == -1 ? IniStructure.Count : firstSectionIdx;
+                if (removeCount > 0)
+                    IniStructure.RemoveRange(0, removeCount);
+            }
+            else
+            {
+                int startIdx = IniStructure.FindIndex(e => e is SectionEntry se && se.SectionName == sectionName);
+                if (startIdx == -1) return;
+
+                int endIdx = startIdx + 1;
+                while (endIdx < IniStructure.Count && !(IniStructure[endIdx] is SectionEntry))
+                    endIdx++;
+
+                IniStructure.RemoveRange(startIdx, endIdx - startIdx);
+            }
+
+            RebuildSectionsDictionary();
+            MarkDirty();
+        }
     }
 }

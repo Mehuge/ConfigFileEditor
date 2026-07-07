@@ -116,9 +116,21 @@ namespace ConfigFileEditor
         private void InitSectionContextMenu()
         {
             _sectionContextMenu = new ContextMenuStrip();
+
             var copyAsIniItem = new ToolStripMenuItem("Copy");
             copyAsIniItem.Click += (s, e) => CopySectionToClipboard(treeViewConfigOptions.SelectedNode);
             _sectionContextMenu.Items.Add(copyAsIniItem);
+
+            _sectionContextMenu.Items.Add(new ToolStripSeparator());
+
+            var deleteItem = new ToolStripMenuItem("Delete");
+            deleteItem.Click += (s, e) =>
+            {
+                bool shiftHeld = (Control.ModifierKeys & Keys.Shift) != 0;
+                DeleteSectionNode(treeViewConfigOptions.SelectedNode, skipConfirmation: shiftHeld);
+            };
+            _sectionContextMenu.Items.Add(deleteItem);
+
             treeViewConfigOptions.NodeMouseClick += TreeView_NodeMouseClick;
             treeViewConfigOptions.KeyDown += (s, e) =>
             {
@@ -281,6 +293,24 @@ namespace ConfigFileEditor
             {
                 value.Copy();
             }
+        }
+
+        private void DeleteSectionNode(TreeNode? sectionNode, bool skipConfirmation = false)
+        {
+            if (sectionNode?.Tag is not SectionEntry sectionTag) return;
+
+            if (!skipConfirmation)
+            {
+                int count = sectionNode.Nodes.Count;
+                string detail = count > 0 ? $" and its {count} item(s)" : "";
+                string message = $"Delete section [{sectionTag.SectionName}]{detail}?";
+                if (MessageBox.Show(message, "Delete Section", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                    return;
+            }
+
+            _iniFileHandler.DeleteSection(sectionTag.SectionName);
+            sectionNode.Remove();
+            MarkChanged();
         }
 
         private void CopySectionToClipboard(TreeNode? sectionNode)
