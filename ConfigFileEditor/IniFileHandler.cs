@@ -32,14 +32,16 @@ namespace ConfigFileEditor
             {
                 string trimmedLine = line.Trim();
 
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
+                if (trimmedLine.StartsWith("["))
                 {
-                    currentSectionName = trimmedLine.Substring(1, trimmedLine.Length - 2);
-                    var sectionEntry = new SectionEntry { SectionName = currentSectionName, RawLine = line };
-                    IniStructure.Add(sectionEntry);
+                    int closingBracket = trimmedLine.IndexOf(']', 1);
+                    if (closingBracket > 1)
+                    {
+                        currentSectionName = trimmedLine.Substring(1, closingBracket - 1).Trim();
+                        IniStructure.Add(new SectionEntry { SectionName = currentSectionName, RawLine = line });
+                        continue;
+                    }
                 }
-                else
-                {
                     bool isCommented = trimmedLine.StartsWith(";") || trimmedLine.StartsWith("#");
                     string potentialSettingLine = isCommented ? trimmedLine.Substring(1).Trim() : trimmedLine;
 
@@ -62,7 +64,6 @@ namespace ConfigFileEditor
                         var blankLineEntry = new BlankLineEntry { RawLine = line };
                         IniStructure.Add(blankLineEntry);
                     }
-                }
             }
 
             RebuildSectionsDictionary();
