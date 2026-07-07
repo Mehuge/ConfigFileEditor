@@ -54,7 +54,7 @@ namespace ConfigFileEditor
             // 
             this.nameTextBox.Location = new System.Drawing.Point(60, 40);
             this.nameTextBox.Name = "nameTextBox";
-            this.nameTextBox.Size = new System.Drawing.Size(200, 23);
+            this.nameTextBox.Size = new System.Drawing.Size(370, 23);
             this.nameTextBox.TabIndex = 2;
             // 
             // valueLabel
@@ -70,14 +70,14 @@ namespace ConfigFileEditor
             // 
             this.valueTextBox.Location = new System.Drawing.Point(60, 70);
             this.valueTextBox.Name = "valueTextBox";
-            this.valueTextBox.Size = new System.Drawing.Size(200, 23);
+            this.valueTextBox.Size = new System.Drawing.Size(370, 23);
             this.valueTextBox.TabIndex = 4;
             // 
             // okButton
             // 
-            this.okButton.Location = new System.Drawing.Point(60, 100);
+            this.okButton.Location = new System.Drawing.Point(240, 105);
             this.okButton.Name = "okButton";
-            this.okButton.Size = new System.Drawing.Size(100, 23);
+            this.okButton.Size = new System.Drawing.Size(95, 25);
             this.okButton.TabIndex = 5;
             this.okButton.Text = "OK";
             this.okButton.UseVisualStyleBackColor = true;
@@ -86,9 +86,9 @@ namespace ConfigFileEditor
             // cancelButton
             // 
             this.cancelButton.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.cancelButton.Location = new System.Drawing.Point(160, 100);
+            this.cancelButton.Location = new System.Drawing.Point(340, 105);
             this.cancelButton.Name = "cancelButton";
-            this.cancelButton.Size = new System.Drawing.Size(100, 23);
+            this.cancelButton.Size = new System.Drawing.Size(95, 25);
             this.cancelButton.TabIndex = 6;
             this.cancelButton.Text = "Cancel";
             this.cancelButton.UseVisualStyleBackColor = true;
@@ -100,7 +100,7 @@ namespace ConfigFileEditor
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.cancelButton;
-            this.ClientSize = new System.Drawing.Size(284, 141);
+            this.ClientSize = new System.Drawing.Size(450, 148);
             this.Controls.Add(this.cancelButton);
             this.Controls.Add(this.okButton);
             this.Controls.Add(this.valueTextBox);

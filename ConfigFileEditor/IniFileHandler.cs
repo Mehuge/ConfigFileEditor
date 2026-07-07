@@ -6,6 +6,8 @@ namespace ConfigFileEditor
 {
     public class IniFileHandler
     {
+        public const string DefaultSectionName = "[Default]";
+
         public List<IniEntry> IniStructure { get; private set; } = new List<IniEntry>();
         public Dictionary<string, Dictionary<string, string>> Sections { get; private set; } = new Dictionary<string, Dictionary<string, string>>();
         public string? CurrentFilePath { get; set; }
@@ -24,7 +26,7 @@ namespace ConfigFileEditor
             NewFile(); // Start fresh
             CurrentFilePath = path;
 
-            string currentSectionName = "[Default]";
+            string currentSectionName = DefaultSectionName;
 
             foreach (string line in File.ReadAllLines(path))
             {
@@ -111,7 +113,7 @@ namespace ConfigFileEditor
         public void RebuildSectionsDictionary()
         {
             Sections.Clear();
-            string currentSectionName = "[Default]";
+            string currentSectionName = DefaultSectionName;
 
             foreach (var entry in IniStructure)
             {
@@ -168,6 +170,93 @@ namespace ConfigFileEditor
                 IniStructure.InsertRange(targetIdx, blockToMove);
             }
             MarkDirty();
+        }
+
+        public bool HasSection(string sectionName) => Sections.ContainsKey(sectionName);
+
+        public void AddSection(string sectionName)
+        {
+            IniStructure.Add(new SectionEntry { SectionName = sectionName, RawLine = $"[{sectionName}]" });
+            RebuildSectionsDictionary();
+            MarkDirty();
+        }
+
+        public SettingEntry AddSetting(string sectionName, string key, string value)
+        {
+            if (!Sections.ContainsKey(sectionName))
+                Sections[sectionName] = new Dictionary<string, string>();
+            Sections[sectionName][key] = value;
+
+            var newSetting = new SettingEntry { Key = key, Value = value };
+            int insertIndex = FindSettingInsertionIndex(sectionName);
+            IniStructure.Insert(insertIndex, newSetting);
+
+            if (!IsLastSection(sectionName) && insertIndex < IniStructure.Count && IniStructure[insertIndex] is CommentEntry)
+                IniStructure.Insert(insertIndex + 1, new BlankLineEntry());
+
+            MarkDirty();
+            return newSetting;
+        }
+
+        public void UpdateSettingValue(string sectionName, string key, string newValue)
+        {
+            if (Sections.TryGetValue(sectionName, out var section) && section.ContainsKey(key))
+                section[key] = newValue;
+            MarkDirty();
+        }
+
+        public void RemoveSetting(string sectionName, string key, SettingEntry entry)
+        {
+            if (Sections.TryGetValue(sectionName, out var section))
+                section.Remove(key);
+            IniStructure.Remove(entry);
+            MarkDirty();
+        }
+
+        private int FindSettingInsertionIndex(string sectionName)
+        {
+            int sectionEntryIndex = IniStructure.FindIndex(
+                e => e is SectionEntry se && se.SectionName == sectionName);
+
+            if (sectionEntryIndex != -1)
+            {
+                int endOfSection = sectionEntryIndex + 1;
+                while (endOfSection < IniStructure.Count && !(IniStructure[endOfSection] is SectionEntry))
+                    endOfSection++;
+
+                int insertIndex = endOfSection;
+                for (int i = endOfSection - 1; i > sectionEntryIndex; i--)
+                {
+                    if (IniStructure[i] is SettingEntry) { insertIndex = i + 1; break; }
+                    if (IniStructure[i] is BlankLineEntry) insertIndex = i;
+                }
+                return insertIndex;
+            }
+            else if (sectionName == DefaultSectionName)
+            {
+                int lastDefaultSetting = -1;
+                for (int i = 0; i < IniStructure.Count; i++)
+                {
+                    if (IniStructure[i] is SectionEntry) break;
+                    if (IniStructure[i] is SettingEntry) lastDefaultSetting = i;
+                }
+                return lastDefaultSetting + 1;
+            }
+            else
+            {
+                return IniStructure.Count;
+            }
+        }
+
+        private bool IsLastSection(string sectionName)
+        {
+            int sectionIdx = IniStructure.FindIndex(e => e is SectionEntry se && se.SectionName == sectionName);
+            int start = sectionIdx == -1 ? 0 : sectionIdx + 1;
+            for (int i = start; i < IniStructure.Count; i++)
+            {
+                if (IniStructure[i] is SectionEntry) return false;
+            }
+            return true;
         }
 
         public void MarkDirty() => IsDirty = true;

@@ -7,31 +7,32 @@ namespace ConfigFileEditor
 {
     public partial class MainForm : Form
     {
-        private string? currentFilePath = null;
+        private string? _currentFilePath = null;
         private readonly IniFileHandler _iniFileHandler = new IniFileHandler();
+        private readonly MruManager _mruManager = new MruManager(
+            Path.Combine(Application.StartupPath, "recent_files.txt"));
 
-        private System.Windows.Forms.Timer? searchDebounceTimer;
+        private System.Windows.Forms.Timer? _searchDebounceTimer;
         private System.Windows.Forms.Timer? _statusResetTimer;
-        private CancellationTokenSource? searchCancellationTokenSource;
-        private bool isSearchRunning = false;
+        private CancellationTokenSource? _searchCancellationTokenSource;
+        private bool _isSearchRunning = false;
 
         public MainForm()
         {
             InitializeComponent();
-            LoadMruList();
+            _mruManager.Changed += (s, e) => RefreshMruMenu();
+            RefreshMruMenu();
             EnableTreeViewDragDrop();
             NewFile();
             InitDebounceTimer();
-
             this.FormClosing += Form1_FormClosing;
         }
 
         private void InitDebounceTimer()
         {
-            // Set up the debounce timer
-            searchDebounceTimer = new System.Windows.Forms.Timer();
-            searchDebounceTimer.Interval = 300; // milliseconds delay
-            searchDebounceTimer.Tick += SearchDebounceTimer_Tick;
+            _searchDebounceTimer = new System.Windows.Forms.Timer();
+            _searchDebounceTimer.Interval = 300;
+            _searchDebounceTimer.Tick += SearchDebounceTimer_Tick;
         }
 
         private void NewFile()
@@ -81,7 +82,7 @@ namespace ConfigFileEditor
             // Reset everything to a clean, blank slate
             _iniFileHandler.NewFile();
             treeViewConfigOptions.Nodes.Clear();
-            currentFilePath = null;
+            _currentFilePath = null;
             
             // Reset detail panels
             sectionName.Text = "";
@@ -112,7 +113,7 @@ namespace ConfigFileEditor
         private void treeView1_ItemDrag(object? sender, ItemDragEventArgs e)
         {
             // Prevent dragging if a search filter is currently applied
-            if (!string.IsNullOrEmpty(textFilter.Text) || isSearchRunning) return;
+            if (!string.IsNullOrEmpty(textFilter.Text) || _isSearchRunning) return;
 
             if (e.Button == MouseButtons.Left && e.Item != null)
             {
@@ -235,16 +236,12 @@ namespace ConfigFileEditor
 
         private void saveToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            if (string.IsNullOrEmpty(currentFilePath))
+            if (string.IsNullOrEmpty(_currentFilePath))
             {
                 if (saveINIFileDialog.ShowDialog() == DialogResult.OK)
-                {
-                    currentFilePath = saveINIFileDialog.FileName;
-                }
+                    _currentFilePath = saveINIFileDialog.FileName;
                 else
-                {
                     return;
-                }
             }
             SaveFile();
         }
@@ -319,26 +316,16 @@ namespace ConfigFileEditor
 
         private void value_TextChanged(object sender, EventArgs e)
         {
-            if (treeViewConfigOptions.SelectedNode?.Parent != null)
-            {
-                SettingEntry? settingEntry = treeViewConfigOptions.SelectedNode.Tag as SettingEntry;
-                if (settingEntry != null && settingEntry.Value != value.Text)
-                {
-                    settingEntry.Value = value.Text;
-                    MarkChanged();
+            if (treeViewConfigOptions.SelectedNode?.Parent == null) return;
+            if (treeViewConfigOptions.SelectedNode.Tag is not SettingEntry settingEntry) return;
+            if (settingEntry.Value == value.Text) return;
 
-                    // Keep sections dictionary in sync
-                    if (treeViewConfigOptions.SelectedNode.Parent != null)
-                    {
-                        string sectionName = treeViewConfigOptions.SelectedNode.Parent.Name;
-                        string settingName = treeViewConfigOptions.SelectedNode.Name;
-                        if (_iniFileHandler.Sections.ContainsKey(sectionName) && _iniFileHandler.Sections[sectionName].ContainsKey(settingName))
-                        {
-                            _iniFileHandler.Sections[sectionName][settingName] = value.Text;
-                        }
-                    }
-                }
-            }
+            settingEntry.Value = value.Text;
+            _iniFileHandler.UpdateSettingValue(
+                treeViewConfigOptions.SelectedNode.Parent.Name,
+                treeViewConfigOptions.SelectedNode.Name,
+                value.Text);
+            MarkChanged();
         }
 
         private void buttonAddSetting_Click(object sender, EventArgs e)
@@ -348,138 +335,36 @@ namespace ConfigFileEditor
 
             if (treeViewConfigOptions.SelectedNode == null)
             {
-                sectionName = "[Default]";
-                TreeNode[] nodes = treeViewConfigOptions.Nodes.Find(sectionName, false);
-                if (nodes.Length > 0)
-                {
-                    sectionNode = nodes[0];
-                }
-                else
-                {
-                    sectionNode = treeViewConfigOptions.Nodes.Add(sectionName, sectionName);
-                    if (!_iniFileHandler.Sections.ContainsKey(sectionName))
-                    {
-                        _iniFileHandler.Sections[sectionName] = new Dictionary<string, string>();
-                    }
-                }
+                sectionName = IniFileHandler.DefaultSectionName;
+                sectionNode = EnsureDefaultSectionNode();
             }
-            else if (treeViewConfigOptions.SelectedNode.Parent == null) // A section is selected
+            else if (treeViewConfigOptions.SelectedNode.Parent == null)
             {
                 sectionNode = treeViewConfigOptions.SelectedNode;
                 sectionName = sectionNode.Name;
             }
-            else // A setting is selected
+            else
             {
                 sectionNode = treeViewConfigOptions.SelectedNode.Parent;
                 sectionName = sectionNode.Name;
             }
 
-            using (var form = new InputForm(sectionName))
+            using var form = new InputForm(sectionName);
+            if (form.ShowDialog() != DialogResult.OK) return;
+
+            string? settingName = form.SettingName;
+            string? settingValue = form.SettingValue;
+
+            if (!string.IsNullOrEmpty(settingName) && settingValue != null)
             {
-                if (form.ShowDialog() == DialogResult.OK)
-                {
-                    string? settingName = form.SettingName;
-                    string? settingValue = form.SettingValue;
-
-                    if (!string.IsNullOrEmpty(settingName) && settingValue != null)
-                    {
-                        // 1. Update data structures
-                        if (!_iniFileHandler.Sections.ContainsKey(sectionName))
-                        {
-                            _iniFileHandler.Sections[sectionName] = new Dictionary<string, string>();
-                        }
-                        _iniFileHandler.Sections[sectionName][settingName] = settingValue;
-                        var newSetting = new SettingEntry { Key = settingName, Value = settingValue };
-                        var iniStructure = _iniFileHandler.IniStructure;
-
-                        // 2. Find the correct insertion index in iniStructure
-                        int insertIndex = -1;
-
-                        // Find the section entry in the main structure
-                        int sectionEntryIndex = -1;
-                        for (int i = 0; i < iniStructure.Count; i++)
-                        {
-                            if (iniStructure[i] is SectionEntry se && se.SectionName == sectionName)
-                            {
-                                sectionEntryIndex = i;
-                                break;
-                            }
-                        }
-
-                        if (sectionEntryIndex != -1)
-                        {
-                            // Find the end of the section
-                            int endOfSection = sectionEntryIndex + 1;
-                            while (endOfSection < iniStructure.Count && !(iniStructure[endOfSection] is SectionEntry))
-                            {
-                                endOfSection++;
-                            }
-
-                            // Work backwards from the end of the section
-                            insertIndex = endOfSection;
-                            for (int i = endOfSection - 1; i > sectionEntryIndex; i--)
-                            {
-                                if (iniStructure[i] is SettingEntry)
-                                {
-                                    insertIndex = i + 1;
-                                    break;
-                                }
-                                if (iniStructure[i] is BlankLineEntry)
-                                {
-                                    insertIndex = i;
-                                }
-                            }
-                        }
-                        else if (sectionName == "[Default]")
-                        {
-                            // Find the last setting in the default section
-                            int lastDefaultSetting = -1;
-                            for (int i = 0; i < iniStructure.Count; i++)
-                            {
-                                if (iniStructure[i] is SectionEntry) break; // Stop at the first section
-                                if (iniStructure[i] is SettingEntry)
-                                {
-                                    lastDefaultSetting = i;
-                                }
-                            }
-                            insertIndex = lastDefaultSetting + 1;
-                        }
-                        else
-                        {
-                            // Section not found, add to the end
-                            insertIndex = iniStructure.Count;
-                        }
-
-                        iniStructure.Insert(insertIndex, newSetting);
-
-                        // Determine if this is the last section
-                        bool isLastSection = true;
-                        int searchStartIndex = (sectionEntryIndex == -1) ? 0 : sectionEntryIndex + 1;
-                        for (int i = searchStartIndex; i < iniStructure.Count; i++)
-                        {
-                            if (iniStructure[i] is SectionEntry)
-                            {
-                                isLastSection = false;
-                                break;
-                            }
-                        }
-
-                        // Add a blank line if the next line is a comment, but not for the last section
-                        if (!isLastSection && insertIndex < iniStructure.Count && iniStructure[insertIndex] is CommentEntry)
-                        {
-                            iniStructure.Insert(insertIndex + 1, new BlankLineEntry { RawLine = "" });
-                        }
-
-                        // 3. Update UI
-                        TreeNode newSettingNode = sectionNode.Nodes.Add(settingName, settingName);
-                        newSettingNode.Tag = newSetting;
-                        treeViewConfigOptions.SelectedNode = newSettingNode;
-                        sectionNode.Expand();
-                    }
-
-                    MarkChanged();
-                }
+                SettingEntry newSetting = _iniFileHandler.AddSetting(sectionName, settingName, settingValue);
+                TreeNode newSettingNode = sectionNode!.Nodes.Add(settingName, settingName);
+                newSettingNode.Tag = newSetting;
+                treeViewConfigOptions.SelectedNode = newSettingNode;
+                sectionNode.Expand();
             }
+
+            MarkChanged();
         }
 
         private void commentCheckBox_CheckedChanged(object sender, EventArgs e)
@@ -507,22 +392,15 @@ namespace ConfigFileEditor
 
         private void buttonRemove_Click(object sender, EventArgs e)
         {
-            if (treeViewConfigOptions.SelectedNode?.Parent != null && treeViewConfigOptions.SelectedNode.Tag is SettingEntry settingEntry)
+            if (treeViewConfigOptions.SelectedNode?.Parent != null &&
+                treeViewConfigOptions.SelectedNode.Tag is SettingEntry settingEntry)
             {
-                string sectionName = treeViewConfigOptions.SelectedNode.Parent.Name;
-                string settingName = treeViewConfigOptions.SelectedNode.Name;
-
-                // 1. Remove from data structures
-                if (_iniFileHandler.Sections.ContainsKey(sectionName))
-                {
-                    _iniFileHandler.Sections[sectionName].Remove(settingName);
-                }
-                _iniFileHandler.IniStructure.Remove(settingEntry);
-
-                // 2. Remove from UI
+                _iniFileHandler.RemoveSetting(
+                    treeViewConfigOptions.SelectedNode.Parent.Name,
+                    treeViewConfigOptions.SelectedNode.Name,
+                    settingEntry);
                 treeViewConfigOptions.SelectedNode.Remove();
             }
-
             MarkChanged();
         }
 
@@ -553,10 +431,10 @@ namespace ConfigFileEditor
 
             _iniFileHandler.LoadFile(path);
 
-            AddToMru(path);
+            _mruManager.Add(path);
             UpdateStatus($"File Loaded: {path}");
             this.Text = "Editing " + path;
-            currentFilePath = path;
+            _currentFilePath = path;
 
             string query = textFilter?.Text.Trim().ToLower() ?? "";
             if (query == "")
@@ -570,15 +448,15 @@ namespace ConfigFileEditor
 
         private void SaveFile()
         {
-            if (string.IsNullOrEmpty(currentFilePath))
+            if (string.IsNullOrEmpty(_currentFilePath))
             {
                 SaveFileAs();
                 return;
             }
 
-            _iniFileHandler.CurrentFilePath = currentFilePath;
+            _iniFileHandler.CurrentFilePath = _currentFilePath;
             _iniFileHandler.SaveFile();
-            UpdateStatus($"File saved: {currentFilePath}");
+            UpdateStatus($"File saved: {_currentFilePath}");
             ClearChanged();
         }
 
@@ -591,14 +469,9 @@ namespace ConfigFileEditor
 
             if (saveFileDialog.ShowDialog() != DialogResult.OK) return;
 
-            // Capture the chosen path
-            currentFilePath = saveFileDialog.FileName;
-
-            // Now that currentFilePath is valid, call the core SaveFile() to write the data
+            _currentFilePath = saveFileDialog.FileName;
             SaveFile();
-
-            // Add to your Most Recently Used list if applicable
-            AddToMru(currentFilePath);
+            _mruManager.Add(_currentFilePath);
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
@@ -611,67 +484,25 @@ namespace ConfigFileEditor
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
-        // MRU
-        private List<string> mruFiles = new List<string>();
-        private readonly string mruPath = Path.Combine(Application.StartupPath, "recent_files.txt");
-        private const int MaxMruItems = 5;
-
-        private void LoadMruList()
-        {
-            if (File.Exists(mruPath))
-            {
-                try
-                {
-                    string json = File.ReadAllText(mruPath);
-                    // Using a simple split if you don't want to add JSON dependencies, 
-                    // but here is the logic for a basic string list:
-                    mruFiles = json.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries).ToList();
-                }
-                catch { /* Handle file error */ }
-            }
-            RefreshMruMenu();
-        }
-
-        private void SaveMruList()
-        {
-            File.WriteAllLines(mruPath, mruFiles);
-        }
-
-        private void AddToMru(string filePath)
-        {
-            if (mruFiles.Contains(filePath))
-                mruFiles.Remove(filePath);
-
-            mruFiles.Insert(0, filePath);
-
-            if (mruFiles.Count > MaxMruItems)
-                mruFiles.RemoveAt(MaxMruItems);
-
-            SaveMruList();
-            RefreshMruMenu();
-        }
-
         private void RefreshMruMenu()
         {
-            // Find the File ToolStripMenuItem
-            var fileMenu = menuStrip1.Items.Cast<ToolStripMenuItem>().FirstOrDefault(x => x.Text == "&File" || x.Text == "File");
+            var fileMenu = menuStrip1.Items.Cast<ToolStripMenuItem>()
+                .FirstOrDefault(x => x.Text == "&File" || x.Text == "File");
             if (fileMenu == null) return;
 
-            // Remove existing MRU items to prevent duplicates (identify them by a Tag or Name)
             for (int i = fileMenu.DropDownItems.Count - 1; i >= 0; i--)
             {
                 if (fileMenu.DropDownItems[i].Tag?.ToString() == "MRU")
                     fileMenu.DropDownItems.RemoveAt(i);
             }
 
-            if (mruFiles.Count == 0) return;
+            if (_mruManager.Files.Count == 0) return;
 
             fileMenu.DropDownItems.Add(new ToolStripSeparator { Tag = "MRU" });
-
-            foreach (var path in mruFiles)
+            foreach (var path in _mruManager.Files)
             {
                 var item = new ToolStripMenuItem(path) { Tag = "MRU" };
-                item.Click += (s, e) => LoadFile(path); // Update LoadFile to accept a path!
+                item.Click += (s, e) => LoadFile(path);
                 fileMenu.DropDownItems.Add(item);
             }
         }
@@ -695,11 +526,26 @@ namespace ConfigFileEditor
 
         private TreeNode EnsureDefaultSectionNode()
         {
-            var existing = treeViewConfigOptions.Nodes["[Default]"];
+            var existing = treeViewConfigOptions.Nodes[IniFileHandler.DefaultSectionName];
             if (existing != null) return existing;
-            var node = treeViewConfigOptions.Nodes.Add("[Default]", "[Default]");
-            node.Tag = new SectionEntry { SectionName = "[Default]" };
+            var node = treeViewConfigOptions.Nodes.Add(IniFileHandler.DefaultSectionName, IniFileHandler.DefaultSectionName);
+            node.Tag = new SectionEntry { SectionName = IniFileHandler.DefaultSectionName };
             return node;
+        }
+
+        private void AddEntryToSectionNode(IniEntry entry, TreeNode sectionNode)
+        {
+            if (entry is SettingEntry settingEntry)
+            {
+                string nodeText = settingEntry.IsCommentedOut ? $"; {settingEntry.Key}" : settingEntry.Key;
+                var node = sectionNode.Nodes.Add(settingEntry.Key, nodeText);
+                node.Tag = settingEntry;
+            }
+            else if (entry is CommentEntry commentEntry)
+            {
+                var node = sectionNode.Nodes.Add(commentEntry.RawLine);
+                node.Tag = commentEntry;
+            }
         }
 
         private void UpdateTreeView(string searchTerm = "")
@@ -752,25 +598,15 @@ namespace ConfigFileEditor
                 {
                     bool keyMatch = settingEntry.Key.ToLower().Contains(query);
                     bool valueMatch = settingEntry.Value.ToLower().Contains(query);
-
-                    // If searching, skip this setting if neither key nor value matches, 
-                    // UNLESS the parent section name itself was a match
                     if (isSearching && !keyMatch && !valueMatch && currentSectionNode.ImageKey != "match")
                         continue;
-
-                    string nodeText = settingEntry.IsCommentedOut ? $"; {settingEntry.Key}" : settingEntry.Key;
-                    TreeNode settingNode = currentSectionNode.Nodes.Add(settingEntry.Key, nodeText);
-                    settingNode.Tag = settingEntry;
+                    AddEntryToSectionNode(entry, currentSectionNode);
                 }
                 else if (entry is CommentEntry commentEntry)
                 {
-                    bool commentMatch = commentEntry.RawLine.ToLower().Contains(query);
-
-                    if (isSearching && !commentMatch && currentSectionNode.ImageKey != "match")
+                    if (isSearching && !commentEntry.RawLine.ToLower().Contains(query) && currentSectionNode.ImageKey != "match")
                         continue;
-
-                    TreeNode commentNode = currentSectionNode.Nodes.Add(commentEntry.RawLine);
-                    commentNode.Tag = commentEntry;
+                    AddEntryToSectionNode(entry, currentSectionNode);
                 }
             }
 
@@ -817,19 +653,15 @@ namespace ConfigFileEditor
 
         private void textFilter_TextChanged(object sender, EventArgs e)
         {
-            if (searchDebounceTimer == null) return;
-
-            // Stop the timer if it's currently counting down from a previous keystroke
-            searchDebounceTimer.Stop();
-
-            // Start a fresh 300ms countdown
-            searchDebounceTimer.Start();
+            if (_searchDebounceTimer == null) return;
+            _searchDebounceTimer.Stop();
+            _searchDebounceTimer.Start();
         }
 
         private async void SearchDebounceTimer_Tick(object? sender, EventArgs e)
         {
-            if (searchDebounceTimer == null || textFilter == null) return;
-            searchDebounceTimer.Stop();
+            if (_searchDebounceTimer == null || textFilter == null) return;
+            _searchDebounceTimer.Stop();
 
             string query = textFilter.Text.Trim().ToLower();
             if (string.IsNullOrEmpty(query))
@@ -843,21 +675,17 @@ namespace ConfigFileEditor
 
         private async Task ExecuteSearchAsync(string query, string status)
         {
-            // 1. Cancel any previous background search running
-            searchCancellationTokenSource?.Cancel();
-            searchCancellationTokenSource?.Dispose();
-            searchCancellationTokenSource = new CancellationTokenSource();
-            var token = searchCancellationTokenSource.Token;
+            _searchCancellationTokenSource?.Cancel();
+            _searchCancellationTokenSource?.Dispose();
+            _searchCancellationTokenSource = new CancellationTokenSource();
+            var token = _searchCancellationTokenSource.Token;
 
-            isSearchRunning = true;
+            _isSearchRunning = true;
             UpdateStatus((status ?? "") + "Searching...");
 
             try
             {
-                // 2. Offload the heavy matching loop to a background thread
                 List<IniEntry> filteredResults = await Task.Run(() => PerformBackgroundFilter(query, token), token);
-
-                // 3. Update the UI thread instantly using BeginUpdate/EndUpdate
                 PopulateTreeWithFilteredData(filteredResults, !string.IsNullOrEmpty(query));
                 UpdateStatus((status ?? "") + (string.IsNullOrEmpty(query) ? "Ready." : $"Found results matching '{query}'."));
             }
@@ -867,7 +695,7 @@ namespace ConfigFileEditor
             }
             finally
             {
-                isSearchRunning = false;
+                _isSearchRunning = false;
             }
         }
 
@@ -998,17 +826,7 @@ namespace ConfigFileEditor
                 }
                 else if (currentSectionNode != null)
                 {
-                    if (entry is SettingEntry settingEntry)
-                    {
-                        string nodeText = settingEntry.IsCommentedOut ? $"; {settingEntry.Key}" : settingEntry.Key;
-                        TreeNode settingNode = currentSectionNode.Nodes.Add(settingEntry.Key, nodeText);
-                        settingNode.Tag = settingEntry;
-                    }
-                    else if (entry is CommentEntry commentEntry)
-                    {
-                        TreeNode commentNode = currentSectionNode.Nodes.Add(commentEntry.RawLine);
-                        commentNode.Tag = commentEntry;
-                    }
+                    AddEntryToSectionNode(entry, currentSectionNode);
                 }
             }
 
@@ -1032,74 +850,23 @@ namespace ConfigFileEditor
 
         private void buttonAddSection_Click(object? sender, EventArgs e)
         {
-            // 1. Prompt the user for the new section name using a dialog
-            string newSectionName = PromptForSectionName();
+            using var dialog = new SingleInputDialog("Add New Section", "Enter section name:");
+            if (dialog.ShowDialog() != DialogResult.OK) return;
 
-            // Early return if the user cancelled or entered nothing
+            string newSectionName = dialog.InputValue.Trim('[', ']').Trim();
             if (string.IsNullOrWhiteSpace(newSectionName)) return;
 
-            // Clean up brackets if the user typed them manually (e.g., "[MySection]" -> "MySection")
-            newSectionName = newSectionName.Trim('[', ']');
-
-            // 2. Prevent duplicate sections
-            if (_iniFileHandler.Sections.ContainsKey(newSectionName))
+            if (_iniFileHandler.HasSection(newSectionName))
             {
-                MessageBox.Show($"A section named [{newSectionName}] already exists.", "Duplicate Section", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"A section named [{newSectionName}] already exists.",
+                    "Duplicate Section", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
-            // 3. Create the new section entry data model
-            var newSectionEntry = new SectionEntry
-            {
-                SectionName = newSectionName,
-                RawLine = $"[{newSectionName}]"
-            };
-
-            // 4. Update the single source of truth (Append it to the end of the file structure)
-            _iniFileHandler.IniStructure.Add(newSectionEntry);
-
-            // 5. Update the fast-lookup dictionary and refresh the visual tree
-            _iniFileHandler.RebuildSectionsDictionary();
+            _iniFileHandler.AddSection(newSectionName);
             UpdateTreeView();
-
-            // 6. Find and automatically select the newly created section in the UI
             SelectSectionNode(newSectionName);
-
-            // 7. Mark the file as modified
             MarkChanged();
-        }
-
-        private string PromptForSectionName()
-        {
-            // Creates a lightweight, dynamic popup dialog form on the fly
-            Form prompt = new Form()
-            {
-                Width = 350,
-                Height = 180,
-                FormBorderStyle = FormBorderStyle.FixedDialog,
-                Text = "Add New Section",
-                StartPosition = FormStartPosition.CenterParent,
-                MaximizeBox = false,
-                MinimizeBox = false
-            };
-
-            Label textLabel = new Label() { Left = 20, Top = 20, Width = 300, Text = "Enter section name:" };
-            TextBox textBox = new TextBox() { Left = 20, Top = 45, Width = 300 };
-            Button confirmation = new Button() { Text = "OK", Left = 115, Width = 100, Top = 80, Height = 30, DialogResult = DialogResult.OK };
-            Button cancel = new Button() { Text = "Cancel", Left = 220, Width = 100, Top = 80, Height = 30, DialogResult = DialogResult.Cancel };
-
-            confirmation.Click += (sender, e) => { prompt.Close(); };
-            cancel.Click += (sender, e) => { prompt.Close(); };
-
-            prompt.Controls.Add(textBox);
-            prompt.Controls.Add(confirmation);
-            prompt.Controls.Add(cancel);
-            prompt.Controls.Add(textLabel);
-            prompt.AcceptButton = confirmation;
-            prompt.CancelButton = cancel;
-
-            // Return the text if they clicked OK, otherwise return string.Empty
-            return prompt.ShowDialog() == DialogResult.OK ? textBox.Text : string.Empty;
         }
 
         private void SelectSectionNode(string sectionName)
