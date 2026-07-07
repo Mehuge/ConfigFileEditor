@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Windows.Forms;
 
 namespace ConfigFileEditor
@@ -16,6 +17,7 @@ namespace ConfigFileEditor
         private System.Windows.Forms.Timer? _statusResetTimer;
         private CancellationTokenSource? _searchCancellationTokenSource;
         private bool _isSearchRunning = false;
+        private ContextMenuStrip? _sectionContextMenu;
 
         public MainForm()
         {
@@ -23,6 +25,7 @@ namespace ConfigFileEditor
             _mruManager.Changed += (s, e) => RefreshMruMenu();
             RefreshMruMenu();
             EnableTreeViewDragDrop();
+            InitSectionContextMenu();
             NewFile();
             InitDebounceTimer();
             this.FormClosing += Form1_FormClosing;
@@ -108,6 +111,20 @@ namespace ConfigFileEditor
             treeViewConfigOptions.DragEnter += treeView1_DragEnter;
             treeViewConfigOptions.DragOver += treeView1_DragOver;
             treeViewConfigOptions.DragDrop += treeView1_DragDrop;
+        }
+
+        private void InitSectionContextMenu()
+        {
+            _sectionContextMenu = new ContextMenuStrip();
+            var copyAsIniItem = new ToolStripMenuItem("Copy");
+            copyAsIniItem.Click += (s, e) => CopySectionToClipboard(treeViewConfigOptions.SelectedNode);
+            _sectionContextMenu.Items.Add(copyAsIniItem);
+            treeViewConfigOptions.NodeMouseClick += TreeView_NodeMouseClick;
+            treeViewConfigOptions.KeyDown += (s, e) =>
+            {
+                if (e.Control && e.KeyCode == Keys.C && treeViewConfigOptions.SelectedNode?.Tag is SectionEntry)
+                    CopySectionToClipboard(treeViewConfigOptions.SelectedNode);
+            };
         }
 
         private void treeView1_ItemDrag(object? sender, ItemDragEventArgs e)
@@ -226,6 +243,13 @@ namespace ConfigFileEditor
             MarkChanged();
         }
 
+        private void TreeView_NodeMouseClick(object? sender, TreeNodeMouseClickEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right || e.Node?.Tag is not SectionEntry) return;
+            treeViewConfigOptions.SelectedNode = e.Node;
+            _sectionContextMenu?.Show(treeViewConfigOptions, e.Location);
+        }
+
         private void openToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (openINIFileDialog.ShowDialog() == DialogResult.OK)
@@ -257,6 +281,49 @@ namespace ConfigFileEditor
             {
                 value.Copy();
             }
+        }
+
+        private void CopySectionToClipboard(TreeNode? sectionNode)
+        {
+            if (sectionNode?.Tag is not SectionEntry sectionTag) return;
+
+            string sectionName = sectionTag.SectionName;
+            bool isDefault = string.IsNullOrEmpty(sectionTag.RawLine);
+
+            var sb = new StringBuilder();
+
+            // Write the section header, preserving original formatting for real sections
+            sb.AppendLine(!string.IsNullOrEmpty(sectionTag.RawLine)
+                ? sectionTag.RawLine
+                : $"[{sectionName}]");
+
+            // Collect entries belonging to this section from the data structure
+            bool collecting = isDefault; // Default section entries come before any explicit header
+
+            foreach (var entry in _iniFileHandler.IniStructure)
+            {
+                if (entry is SectionEntry se)
+                {
+                    if (!isDefault && se.SectionName == sectionName)
+                    {
+                        collecting = true;
+                        continue;
+                    }
+                    if (collecting) break; // Reached the next section boundary
+                    continue;
+                }
+
+                if (!collecting) continue;
+
+                if (entry is SettingEntry st)
+                    sb.AppendLine($"{(st.IsCommentedOut ? "; " : "")}{st.Key}={st.Value}");
+                else if (entry is CommentEntry ce)
+                    sb.AppendLine(ce.RawLine);
+            }
+
+            string text = sb.ToString().TrimEnd('\r', '\n');
+            if (!string.IsNullOrWhiteSpace(text))
+                Clipboard.SetText(text);
         }
 
         private void pasteToolStripMenuItem_Click(object sender, EventArgs e)
