@@ -192,40 +192,30 @@ namespace ConfigFileEditor
             Point targetPoint = treeViewConfigOptions.PointToClient(new Point(e.X, e.Y));
             TreeNode targetNode = treeViewConfigOptions.GetNodeAt(targetPoint);
 
-            if (targetNode == null || e.Data?.GetData(typeof(TreeNode)) is not TreeNode draggedNode || draggedNode == targetNode) return;
-
-            // Grab the actual data entries bound to these nodes
-
-            if (draggedNode.Tag is not IniEntry draggedEntry || targetNode.Tag is not IniEntry targetEntry) return;
+            if (targetNode == null) return;
+            if (e.Data?.GetData(typeof(TreeNode)) is not TreeNode draggedNode) return;
+            if (draggedNode == targetNode) return;
+            if (draggedNode.Tag is not IniEntry draggedEntry) return;
+            if (targetNode.Tag is not IniEntry targetEntry) return;
 
             // --- STEP 1: Update the single source of truth (iniStructure) ---
 
-            if (draggedNode.Level == 0 && targetNode.Level == 0 && 
-                draggedEntry is SectionEntry draggedSection && targetEntry is SectionEntry targetSection)
+            if (draggedNode.Level == 0 && targetNode.Level == 0
+                && draggedEntry is SectionEntry draggedSection && targetEntry is SectionEntry targetSection)
             {
                 // CASE A: Moving a Section. We must move the SectionEntry AND all its settings/comments block.
                 _iniFileHandler.MoveSectionInDataStructure(draggedSection, targetSection);
             }
-            else if (draggedNode.Level == 1)
-            {
-                var iniStructure = _iniFileHandler.IniStructure;
 
-                // Find where the dragged entry currently lives and pull it out
+            if (draggedNode.Level == 1)
+            {
+                // CASE B: Moving a key/value entry.
+                var iniStructure = _iniFileHandler.IniStructure;
                 iniStructure.Remove(draggedEntry);
 
-                // Figure out where to insert it based on where it was dropped
                 int targetIndex = iniStructure.IndexOf(targetEntry);
-
-                if (targetNode.Level == 0)
-                {
-                    // Dropped directly on a section header node -> Insert it right after the section header
-                    iniStructure.Insert(targetIndex + 1, draggedEntry);
-                }
-                else if (targetNode.Level == 1)
-                {
-                    // Dropped onto another option -> Insert it right at that option's position
-                    iniStructure.Insert(targetIndex, draggedEntry);
-                }
+                int insertIndex = targetNode.Level == 0 ? targetIndex + 1 : targetIndex;
+                iniStructure.Insert(insertIndex, draggedEntry);
             }
 
             // --- STEP 2: Update the UI to match ---
@@ -234,15 +224,18 @@ namespace ConfigFileEditor
                 draggedNode.Remove();
                 treeViewConfigOptions.Nodes.Insert(targetNode.Index, draggedNode);
             }
-            else if (draggedNode.Level == 1)
+
+            if (draggedNode.Level == 1)
             {
                 draggedNode.Remove();
+
                 if (targetNode.Level == 0)
                 {
                     targetNode.Nodes.Insert(0, draggedNode);
                     targetNode.Expand();
                 }
-                else if (targetNode.Level == 1)
+
+                if (targetNode.Level == 1)
                 {
                     targetNode.Parent.Nodes.Insert(targetNode.Index, draggedNode);
                 }
@@ -253,7 +246,7 @@ namespace ConfigFileEditor
             // --- STEP 3: Rebuild the fast-lookup Dictionary ---
             _iniFileHandler.RebuildSectionsDictionary();
 
-            // --- STEP 4: Mark as changed
+            // --- STEP 4: Mark as changed ---
             MarkChanged();
         }
 
