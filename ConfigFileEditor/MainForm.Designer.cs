@@ -210,11 +210,11 @@ namespace ConfigFileEditor
             // 
             // openINIFileDialog
             // 
-            openINIFileDialog.Filter = "INI files (*.conf)|*.conf|All files (*.*)|*.*";
+            openINIFileDialog.Filter = "Configuration Files (*.ini;*.cfg;*.conf)|*.ini;*.cfg;*.conf|All Files (*.*)|*.*";
             // 
             // saveINIFileDialog
             // 
-            saveINIFileDialog.Filter = "INI files (*.conf)|*.conf|All files (*.*)|*.*";
+            saveINIFileDialog.Filter = "Configuration Files (*.ini;*.cfg;*.conf)|*.ini;*.cfg;*.conf|All Files (*.*)|*.*";
             // 
             // sectionLabel
             // 

@@ -571,7 +571,7 @@ namespace ConfigFileEditor
         private void SaveFileAs()
         {
             using SaveFileDialog saveFileDialog = new SaveFileDialog();
-            saveFileDialog.Filter = "Configuration Files (*.ini;*.cfg)|*.ini;*.cfg|All Files (*.*)|*.*";
+            saveFileDialog.Filter = "Configuration Files (*.ini;*.cfg;*.conf)|*.ini;*.cfg;*.conf|All Files (*.*)|*.*";
             saveFileDialog.DefaultExt = "ini";
             saveFileDialog.Title = "Save Configuration File As";
 
