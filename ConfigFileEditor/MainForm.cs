@@ -277,6 +277,17 @@ namespace ConfigFileEditor
             SaveFile();
         }
 
+        private void openInNotepadToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrEmpty(_currentFilePath))
+            {
+                MessageBox.Show("No file is currently open.", "Open in Notepad",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            System.Diagnostics.Process.Start("notepad.exe", _currentFilePath);
+        }
+
         private void exitToolStripMenuItem_Click(object sender, EventArgs e)
         {
             Application.Exit();
