@@ -277,6 +277,11 @@ namespace ConfigFileEditor
             SaveFile();
         }
 
+        private void saveAsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            SaveFileAs();
+        }
+
         private void openInNotepadToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (string.IsNullOrEmpty(_currentFilePath))
