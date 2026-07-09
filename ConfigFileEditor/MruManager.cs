@@ -31,6 +31,15 @@ namespace ConfigFileEditor
             Changed?.Invoke(this, EventArgs.Empty);
         }
 
+        public void Remove(string filePath)
+        {
+            if (_files.Remove(filePath))
+            {
+                Save();
+                Changed?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
         private void Load()
         {
             if (!File.Exists(_filePath)) return;

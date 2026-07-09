@@ -529,6 +529,14 @@ namespace ConfigFileEditor
         {
             if (string.IsNullOrEmpty(path)) return;
 
+            if (!File.Exists(path))
+            {
+                MessageBox.Show($"The file could not be found and will be removed from the recent files list:\n\n{path}",
+                    "File Not Found", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _mruManager.Remove(path);
+                return;
+            }
+
             // Clear detail panel
             sectionName.Text = "";
             keyName.Text = "";
