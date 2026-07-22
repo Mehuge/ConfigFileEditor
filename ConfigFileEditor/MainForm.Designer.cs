@@ -42,6 +42,8 @@ namespace ConfigFileEditor
             copyToolStripMenuItem = new ToolStripMenuItem();
             pasteToolStripMenuItem = new ToolStripMenuItem();
             selectAllToolStripMenuItem = new ToolStripMenuItem();
+            toolStripSeparator2 = new ToolStripSeparator();
+            pasteSectionToolStripMenuItem = new ToolStripMenuItem();
             treeViewConfigOptions = new TreeView();
             valueLabel = new Label();
             value = new TextBox();
@@ -131,7 +133,7 @@ namespace ConfigFileEditor
             // 
             // editToolStripMenuItem
             // 
-            editToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { copyToolStripMenuItem, pasteToolStripMenuItem, selectAllToolStripMenuItem });
+            editToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { copyToolStripMenuItem, pasteToolStripMenuItem, selectAllToolStripMenuItem, toolStripSeparator2, pasteSectionToolStripMenuItem });
             editToolStripMenuItem.Name = "editToolStripMenuItem";
             editToolStripMenuItem.Size = new Size(49, 24);
             editToolStripMenuItem.Text = "Edit";
@@ -156,6 +158,18 @@ namespace ConfigFileEditor
             selectAllToolStripMenuItem.Size = new Size(154, 26);
             selectAllToolStripMenuItem.Text = "Select All";
             selectAllToolStripMenuItem.Click += selectAllToolStripMenuItem_Click;
+            // 
+            // toolStripSeparator2
+            // 
+            toolStripSeparator2.Name = "toolStripSeparator2";
+            toolStripSeparator2.Size = new Size(151, 6);
+            // 
+            // pasteSectionToolStripMenuItem
+            // 
+            pasteSectionToolStripMenuItem.Name = "pasteSectionToolStripMenuItem";
+            pasteSectionToolStripMenuItem.Size = new Size(154, 26);
+            pasteSectionToolStripMenuItem.Text = "Paste Section";
+            pasteSectionToolStripMenuItem.Click += pasteSectionToolStripMenuItem_Click;
             // 
             // treeViewConfigOptions
             // 
@@ -383,5 +397,7 @@ namespace ConfigFileEditor
         private ToolStripMenuItem newFileToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem openInNotepadToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator1;
+    private System.Windows.Forms.ToolStripSeparator toolStripSeparator2;
+    private System.Windows.Forms.ToolStripMenuItem pasteSectionToolStripMenuItem;
     }
 }

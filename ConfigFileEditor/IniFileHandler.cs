@@ -175,6 +175,82 @@ namespace ConfigFileEditor
 
         public bool HasSection(string sectionName) => Sections.ContainsKey(sectionName);
 
+        private SettingEntry? FindSettingEntry(string sectionName, string key)
+        {
+            // The default section has no SectionEntry in IniStructure; its entries
+            // are those that appear before the first explicit section header.
+            bool isDefault = sectionName == DefaultSectionName;
+            bool inSection = isDefault;
+            foreach (var entry in IniStructure)
+            {
+                if (entry is SectionEntry se)
+                {
+                    if (!isDefault && se.SectionName == sectionName) { inSection = true; continue; }
+                    if (inSection) break; // moved past our section
+                }
+                if (inSection && entry is SettingEntry st && st.Key == key && !st.IsCommentedOut)
+                    return st;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Pastes a section into the structure. If the section is new it is appended at the end.
+        /// If it already exists, settings are merged: existing active keys are updated, new keys are
+        /// added (preserving their commented status). Commented entries never overwrite active keys.
+        /// </summary>
+        public (bool isNewSection, int addedCount, int updatedCount) PasteSection(
+            string sectionName, List<(string key, string value, bool isCommented)> keyValuePairs)
+        {
+            bool isNewSection = !HasSection(sectionName);
+            // The default section is implicit — never create a [[Default]] header for it.
+            if (isNewSection && sectionName != DefaultSectionName)
+                AddSection(sectionName);
+
+            int addedCount = 0, updatedCount = 0;
+
+            foreach (var (key, val, isCommented) in keyValuePairs)
+            {
+                bool activeKeyExists = Sections.TryGetValue(sectionName, out var sectionDict) && sectionDict.ContainsKey(key);
+
+                if (activeKeyExists)
+                {
+                    if (!isCommented)
+                    {
+                        // Update the existing active entry
+                        var existing = FindSettingEntry(sectionName, key);
+                        if (existing != null)
+                        {
+                            existing.Value = val;
+                            sectionDict![key] = val;
+                            updatedCount++;
+                        }
+                    }
+                    // isCommented + activeKeyExists: don't overwrite an active key with a commented version
+                }
+                else
+                {
+                    if (!isCommented)
+                    {
+                        AddSetting(sectionName, key, val);
+                    }
+                    else
+                    {
+                        // Insert commented entry directly — Sections only tracks active keys
+                        var commentedEntry = new SettingEntry { Key = key, Value = val, IsCommentedOut = true };
+                        int insertIndex = FindSettingInsertionIndex(sectionName);
+                        IniStructure.Insert(insertIndex, commentedEntry);
+                    }
+                    addedCount++;
+                }
+            }
+
+            if (updatedCount > 0 || (addedCount > 0 && keyValuePairs.Any(e => e.isCommented)))
+                MarkDirty();
+
+            return (isNewSection, addedCount, updatedCount);
+        }
+
         public void AddSection(string sectionName)
         {
             IniStructure.Add(new SectionEntry { SectionName = sectionName, RawLine = $"[{sectionName}]" });
