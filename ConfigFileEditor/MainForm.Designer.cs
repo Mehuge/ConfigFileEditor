@@ -102,6 +102,7 @@ namespace ConfigFileEditor
             // saveToolStripMenuItem
             // 
             saveToolStripMenuItem.Name = "saveToolStripMenuItem";
+            saveToolStripMenuItem.ShortcutKeys = Keys.Control | Keys.S;
             saveToolStripMenuItem.Size = new Size(224, 26);
             saveToolStripMenuItem.Text = "Save";
             saveToolStripMenuItem.Click += saveToolStripMenuItem_Click;
