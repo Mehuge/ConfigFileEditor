@@ -32,9 +32,11 @@ namespace ConfigFileEditor
             menuStrip1 = new MenuStrip();
             fileToolStripMenuItem = new ToolStripMenuItem();
             newFileToolStripMenuItem = new ToolStripMenuItem();
+            newWindowToolStripMenuItem = new ToolStripMenuItem();
             openToolStripMenuItem = new ToolStripMenuItem();
             saveToolStripMenuItem = new ToolStripMenuItem();
             saveAsToolStripMenuItem = new ToolStripMenuItem();
+            toolStripSeparator3 = new ToolStripSeparator();
             openInNotepadToolStripMenuItem = new ToolStripMenuItem();
             toolStripSeparator1 = new ToolStripSeparator();
             exitToolStripMenuItem = new ToolStripMenuItem();
@@ -78,7 +80,7 @@ namespace ConfigFileEditor
             // 
             // fileToolStripMenuItem
             // 
-            fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { newFileToolStripMenuItem, openToolStripMenuItem, saveToolStripMenuItem, saveAsToolStripMenuItem, openInNotepadToolStripMenuItem, toolStripSeparator1, exitToolStripMenuItem });
+            fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { newFileToolStripMenuItem, openToolStripMenuItem, saveToolStripMenuItem, saveAsToolStripMenuItem, toolStripSeparator3, newWindowToolStripMenuItem, openInNotepadToolStripMenuItem, toolStripSeparator1, exitToolStripMenuItem });
             fileToolStripMenuItem.Name = "fileToolStripMenuItem";
             fileToolStripMenuItem.Size = new Size(46, 24);
             fileToolStripMenuItem.Text = "File";
@@ -111,6 +113,19 @@ namespace ConfigFileEditor
             saveAsToolStripMenuItem.Size = new Size(224, 26);
             saveAsToolStripMenuItem.Text = "Save As...";
             saveAsToolStripMenuItem.Click += saveAsToolStripMenuItem_Click;
+            // 
+            // toolStripSeparator3
+            // 
+            toolStripSeparator3.Name = "toolStripSeparator3";
+            toolStripSeparator3.Size = new Size(177, 6);
+            // 
+            // newWindowToolStripMenuItem
+            // 
+            newWindowToolStripMenuItem.Name = "newWindowToolStripMenuItem";
+            newWindowToolStripMenuItem.ShortcutKeys = Keys.Control | Keys.Shift | Keys.N;
+            newWindowToolStripMenuItem.Size = new Size(149, 26);
+            newWindowToolStripMenuItem.Text = "New Window";
+            newWindowToolStripMenuItem.Click += newWindowToolStripMenuItem_Click;
             // 
             // openInNotepadToolStripMenuItem
             // 
@@ -395,6 +410,8 @@ namespace ConfigFileEditor
         private Button buttonClearFilter;
         private Button buttonAddSection;
         private ToolStripMenuItem newFileToolStripMenuItem;
+        private ToolStripMenuItem newWindowToolStripMenuItem;
+        private System.Windows.Forms.ToolStripSeparator toolStripSeparator3;
         private System.Windows.Forms.ToolStripMenuItem openInNotepadToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator1;
     private System.Windows.Forms.ToolStripSeparator toolStripSeparator2;

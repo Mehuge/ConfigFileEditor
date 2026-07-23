@@ -293,6 +293,12 @@ namespace ConfigFileEditor
             System.Diagnostics.Process.Start("notepad.exe", _currentFilePath);
         }
 
+        private void newWindowToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            var newForm = new MainForm();
+            newForm.Show();
+        }
+
         private void exitToolStripMenuItem_Click(object sender, EventArgs e)
         {
             Application.Exit();
