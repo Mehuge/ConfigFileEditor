@@ -299,6 +299,16 @@ namespace ConfigFileEditor
             newForm.Show();
         }
 
+        private void aboutToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            string version = Application.ProductVersion;
+            MessageBox.Show(
+                $"Config File Editor\nVersion {version}\n\n© Mehuge {DateTime.Now.Year}\n\nA fully featured INI/CFG configuration file editor.\n\nGitHub: https://github.com/Mehuge/ConfigFileEditor",
+                "About Config File Editor",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
         private void exitToolStripMenuItem_Click(object sender, EventArgs e)
         {
             Application.Exit();
