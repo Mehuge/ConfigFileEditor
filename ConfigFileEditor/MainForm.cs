@@ -391,7 +391,7 @@ namespace ConfigFileEditor
             }
         }
 
-        private (string sectionName, List<(string key, string value, bool isCommented)> entries)? ParseClipboardAsSection()
+        private List<(string sectionName, List<(string key, string value, bool isCommented)> entries)>? ParseClipboardAsSections()
         {
             if (!Clipboard.ContainsText()) return null;
 
@@ -400,72 +400,94 @@ namespace ConfigFileEditor
 
             if (lines.Length == 0) return null;
 
-            // First line must be a valid section header
-            string firstLine = lines[0].Trim();
-            if (!firstLine.StartsWith("[")) return null;
+            // First non-empty line must be a valid section header
+            if (!lines[0].Trim().StartsWith("[")) return null;
 
-            string sectionName;
+            var sections = new List<(string sectionName, List<(string key, string value, bool isCommented)> entries)>();
+            string? currentSection = null;
+            List<(string key, string value, bool isCommented)>? currentEntries = null;
 
-            // [[Default]] is the clipboard representation of the implicit default section
-            if (firstLine.Equals($"[{IniFileHandler.DefaultSectionName}]", StringComparison.OrdinalIgnoreCase))
+            foreach (string line in lines)
             {
-                sectionName = IniFileHandler.DefaultSectionName;
-            }
-            else
-            {
-                int closingBracket = firstLine.IndexOf(']', 1);
-                if (closingBracket <= 1) return null;
-                sectionName = firstLine.Substring(1, closingBracket - 1).Trim();
-                if (string.IsNullOrWhiteSpace(sectionName)) return null;
-            }
-
-            var entries = new List<(string key, string value, bool isCommented)>();
-
-            for (int i = 1; i < lines.Length; i++)
-            {
-                string trimmed = lines[i].Trim();
+                string trimmed = line.Trim();
                 if (string.IsNullOrEmpty(trimmed)) continue;
 
-                bool isCommented = trimmed.StartsWith(";") || trimmed.StartsWith("#");
-                string content = isCommented ? trimmed.Substring(1).Trim() : trimmed;
-
-                int eqIdx = content.IndexOf('=');
-                if (eqIdx > 0)
+                if (trimmed.StartsWith("["))
                 {
-                    string key = content.Substring(0, eqIdx).Trim();
-                    string val = content.Substring(eqIdx + 1).Trim();
-                    if (!string.IsNullOrEmpty(key))
-                        entries.Add((key, val, isCommented));
+                    // Save the previous section before starting a new one
+                    if (currentSection != null && currentEntries != null)
+                        sections.Add((currentSection, currentEntries));
+
+                    // Parse section name
+                    string sectionName;
+                    if (trimmed.Equals($"[{IniFileHandler.DefaultSectionName}]", StringComparison.OrdinalIgnoreCase))
+                    {
+                        sectionName = IniFileHandler.DefaultSectionName;
+                    }
+                    else
+                    {
+                        int closingBracket = trimmed.IndexOf(']', 1);
+                        if (closingBracket <= 1) return null;
+                        sectionName = trimmed.Substring(1, closingBracket - 1).Trim();
+                        if (string.IsNullOrWhiteSpace(sectionName)) return null;
+                    }
+
+                    currentSection = sectionName;
+                    currentEntries = new List<(string key, string value, bool isCommented)>();
+                }
+                else if (currentEntries != null)
+                {
+                    bool isCommented = trimmed.StartsWith(";") || trimmed.StartsWith("#");
+                    string content = isCommented ? trimmed.Substring(1).Trim() : trimmed;
+
+                    int eqIdx = content.IndexOf('=');
+                    if (eqIdx > 0)
+                    {
+                        string key = content.Substring(0, eqIdx).Trim();
+                        string val = content.Substring(eqIdx + 1).Trim();
+                        if (!string.IsNullOrEmpty(key))
+                            currentEntries.Add((key, val, isCommented));
+                    }
                 }
             }
 
-            return (sectionName, entries);
+            // Flush the final section
+            if (currentSection != null && currentEntries != null)
+                sections.Add((currentSection, currentEntries));
+
+            return sections.Count > 0 ? sections : null;
         }
 
         private void pasteSectionToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            var parsed = ParseClipboardAsSection();
+            var sections = ParseClipboardAsSections();
 
-            if (parsed == null)
+            if (sections == null || sections.Count == 0)
             {
                 MessageBox.Show(
                     "The clipboard does not contain a valid INI section.\n\nExpected format:\n[SectionName]\nKEY=VALUE",
-                    "Paste Section",
+                    "Paste Sections",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
                 return;
             }
 
-            var (secName, entries) = parsed.Value;
+            int totalAdded = 0, totalUpdated = 0;
 
-            var (isNewSection, addedCount, updatedCount) = _iniFileHandler.PasteSection(secName, entries);
+            foreach (var (secName, entries) in sections)
+            {
+                var (_, addedCount, updatedCount) = _iniFileHandler.PasteSection(secName, entries);
+                totalAdded += addedCount;
+                totalUpdated += updatedCount;
+            }
 
             // Rebuild the tree view, preserving any active search filter
             string query = textFilter?.Text.Trim().ToLower() ?? "";
             UpdateTreeView(query);
 
-            // Select and expand the affected section node
-            var sectionNode = treeViewConfigOptions.Nodes[secName];
+            // Select and expand the last pasted section node
+            string lastSecName = sections[sections.Count - 1].sectionName;
+            var sectionNode = treeViewConfigOptions.Nodes[lastSecName];
             if (sectionNode != null)
             {
                 treeViewConfigOptions.SelectedNode = sectionNode;
@@ -475,8 +497,10 @@ namespace ConfigFileEditor
 
             MarkChanged();
 
-            string action = isNewSection ? "added" : "merged into existing section";
-            UpdateStatus($"[{secName}] {action}. {addedCount} added, {updatedCount} updated.");
+            string sectionLabel = sections.Count == 1
+                ? $"[{sections[0].sectionName}]"
+                : $"{sections.Count} sections";
+            UpdateStatus($"{sectionLabel} pasted. {totalAdded} added, {totalUpdated} updated.");
         }
 
         private void selectAllToolStripMenuItem_Click(object sender, EventArgs e)

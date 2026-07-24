@@ -186,7 +186,7 @@ namespace ConfigFileEditor
             // 
             pasteSectionToolStripMenuItem.Name = "pasteSectionToolStripMenuItem";
             pasteSectionToolStripMenuItem.Size = new Size(154, 26);
-            pasteSectionToolStripMenuItem.Text = "Paste Section";
+            pasteSectionToolStripMenuItem.Text = "Paste Sections";
             pasteSectionToolStripMenuItem.Click += pasteSectionToolStripMenuItem_Click;
             // 
             // helpToolStripMenuItem
