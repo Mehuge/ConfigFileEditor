@@ -503,14 +503,6 @@ namespace ConfigFileEditor
             UpdateStatus($"{sectionLabel} pasted. {totalAdded} added, {totalUpdated} updated.");
         }
 
-        private void selectAllToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            if (value.Focused)
-            {
-                value.SelectAll();
-            }
-        }
-
         private void treeView1_AfterSelect(object sender, TreeViewEventArgs e)
         {
             if (e.Node?.Tag is SettingEntry settingEntry) // A setting is selected
